@@ -4,6 +4,6 @@ __pycache__/
 .vscode/
 venv/
 .venv/
-server/data.json*
-server/audit.jsonl
+data.json*
+audit.jsonl
 *.zip
