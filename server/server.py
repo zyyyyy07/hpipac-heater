@@ -255,7 +255,7 @@ def api_state():
 POST = {"/api/tasks": api_create_task, "/api/device/telemetry": api_telemetry, "/api/device/bind": api_bind,
         "/api/bedside/verify": api_verify, "/api/bedside/start": api_start, "/api/cmd": api_cmd,
         "/api/request/answer": api_answer}
-PAGES = {"/": "ward.html", "/ward": "ward.html", "/pharmacy": "pharmacy.html", "/bedside": "bedside.html"}
+PAGES = {"/": "ward.html", "/ward": "ward.html", "/pharmacy": "pharmacy.html", "/bedside": "bedside.html", "/panel": "panel.html"}
 
 
 class H(BaseHTTPRequestHandler):

@@ -22,6 +22,7 @@
 |---|---|---|
 | `server/server.py` | 服务器(Python 标准库,无依赖) | `test_flow.py` 27 项通过 |
 | `server/static/` | 配液端、护士站大屏、床旁屏三个页面 | 已在浏览器中查看 |
+| `server/static/panel.html` | 主机面板模拟:OLED 四行显示、三个指示灯、暂停和消音键 | 已在浏览器中用模拟设备操作过;是按固件规则重画的,不是固件在运行 |
 | `server/simulator.py` | 设备模拟器,没有硬件时用 | 已运行 |
 | `firmware/include/logic.h` | 状态机、滴空/堵管/过温/报警判定 | 电脑上单元测试 40 项通过 |
 | `firmware/src/main.cpp` | ESP32 硬件驱动、OLED、联网 | PlatformIO 编译通过;未在硬件上运行 |
@@ -42,7 +43,7 @@ python server.py
 python simulator.py http://127.0.0.1:8080 4 20     (另开一个窗口)
 ```
 
-浏览器打开 `http://127.0.0.1:8080/ward`、`/pharmacy`、`/bedside?dev=IW-001`。
+浏览器打开 `http://127.0.0.1:8080/ward`、`/pharmacy`、`/bedside?dev=IW-001`。主机上那块 OLED 小屏和指示灯的样子看 `/panel?dev=IW-001`。
 
 ## 看模型、改尺寸
 

@@ -25,7 +25,7 @@ button:disabled{opacity:.4;cursor:default}
 #msg{min-height:1.5em;color:var(--warn);margin:8px 0}
 </style></head><body>
 <header><h1>输液监控 · 护士站</h1><span class="sum" id="sum"></span><span class="sp"></span>
-<label class="dim">操作人 <input id="by" placeholder="工号/姓名"></label><a href="/pharmacy" style="color:var(--acc)">配液端</a></header>
+<label class="dim">操作人 <input id="by" placeholder="工号/姓名"></label><a href="/pharmacy" style="color:var(--acc)">配液端</a><a href="/panel" style="color:var(--acc)">主机面板</a></header>
 <div id="msg"></div><div class="grid" id="grid"></div>
 <script>
 const AL={OVERTEMP:['加温过温',2],SENSOR:['温度传感器故障',2],EMPTY:['滴空 已截停',2],FREEFLOW:['流速失控 已截停',2],
