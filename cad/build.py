@@ -25,12 +25,16 @@ PARAMS = [
     ("S_GAP", "铝板四周间隙", 1.5, 0.3, 4, 0.1, "加温模块外壳"),
     ("S_INSUL", "保温层厚", 3.0, 1, 10, 0.5, "加温模块外壳"),
     ("DRIP_D", "滴斗外径", 17.0, 12, 24, 0.1, "滴斗传感器夹"),
-    ("BX", "盒长", 170.0, 120, 240, 1, "主控盒"),
-    ("BY", "盒宽", 115.0, 80, 180, 1, "主控盒"),
-    ("BZ", "盒高", 55.0, 35, 90, 1, "主控盒"),
+    ("BX", "盒长", 205.0, 120, 280, 1, "主控盒"),
+    ("BY", "盒宽", 145.0, 80, 220, 1, "主控盒"),
+    ("BZ", "盒高", 65.0, 35, 100, 1, "主控盒"),
+    ("SCR_W", "触摸屏可视区宽", 155.0, 60, 230, 0.5, "主控盒"),
+    ("SCR_H", "触摸屏可视区高", 87.0, 40, 150, 0.5, "主控盒"),
     ("BW", "盒壁厚", 2.5, 1.6, 4, 0.1, "主控盒"),
 ]
 DEFAULTS = {p[0]: float(p[2]) for p in PARAMS}
+# 触摸屏玻璃比可视区每边多出的黑边。默认按树莓派官方 7 英寸触摸屏:玻璃 193 x 111,可视区 154 x 86
+SCR_BEZEL_X, SCR_BEZEL_Y = 19.5, 12.5
 
 
 def apply(params=None):
@@ -45,6 +49,10 @@ def apply(params=None):
         raise ValueError("铝板太薄:槽底下方放不下 Ø2.2 测温孔")
     if p["PL"] < 2 * (p["BEND_R"] + 6) + 60:
         raise ValueError("铝板太短")
+    if p["BX"] < p["SCR_W"] + 2 * SCR_BEZEL_X + 2 * p["BW"] + 5:
+        raise ValueError(f"主控盒太短:放下这块触摸屏至少需要盒长 {p['SCR_W'] + 2 * SCR_BEZEL_X + 2 * p['BW'] + 5:g}")
+    if p["BY"] < p["SCR_H"] + 2 * SCR_BEZEL_Y + p["BW"] + 26.5:
+        raise ValueError(f"主控盒太窄:屏幕下方还要放一排指示灯和按键,至少需要盒宽 {p['SCR_H'] + 2 * SCR_BEZEL_Y + p['BW'] + 26.5:g}")
     g = globals()
     g.update(p)
     g["P"] = p
@@ -162,6 +170,11 @@ def box_body():
     return b
 
 
+def lid_screen_y():
+    """触摸屏可视窗中心在盖板上的高度:玻璃上边缘贴着盖板内圈。"""
+    return BY - BW - 2.5 - SCR_BEZEL_Y - SCR_H / 2
+
+
 def box_lid():
     l = cq.Workplane("XY").box(BX, BY, 3, centered=False).edges("|Z").fillet(8)
     l = l.union(cq.Workplane("XY").workplane(offset=-2).center(BW + 0.3, BW + 0.3)
@@ -171,13 +184,13 @@ def box_lid():
     cut = lambda sk: l.cut(sk.extrude(10, both=True))
     for x, y in ((9, 9), (BX - 9, 9), (9, BY - 9), (BX - 9, BY - 9)):
         l = cut(cq.Workplane("XY").center(x, y).circle(1.7))
-    cx, cy = BX / 2, BY / 2
-    l = cut(cq.Workplane("XY").center(cx - 30, cy + 18).rect(27, 15))        # 0.96 吋 OLED 窗口
-    for x in (cx + 15, cx + 30, cx + 45):                                     # 红 黄 绿 LED Ø5
-        l = cut(cq.Workplane("XY").center(x, cy + 24).circle(2.6))
-    l = cut(cq.Workplane("XY").center(cx - 35, cy - 22).circle(8.1))          # 暂停键 Ø16
-    l = cut(cq.Workplane("XY").center(cx + 10, cy - 22).circle(6.1))          # 消音键 Ø12
-    l = cut(cq.Workplane("XY").center(cx + 50, cy - 22).circle(6.0))          # 蜂鸣器出声孔
+    cx, wy, ry = BX / 2, lid_screen_y(), 14.0
+    l = cut(cq.Workplane("XY").center(cx, wy).rect(SCR_W, SCR_H))            # 触摸屏可视窗;屏从盒内贴在盖板背面
+    for x in (cx - 72, cx - 57, cx - 42):                                     # 红 黄 绿 LED Ø5
+        l = cut(cq.Workplane("XY").center(x, ry).circle(2.6))
+    l = cut(cq.Workplane("XY").center(cx - 8, ry).circle(8.1))                # 暂停键 Ø16
+    l = cut(cq.Workplane("XY").center(cx + 28, ry).circle(6.1))               # 消音键 Ø12
+    l = cut(cq.Workplane("XY").center(cx + 62, ry).circle(6.0))               # 蜂鸣器出声孔
     return l
 
 
@@ -235,6 +248,8 @@ def full_assembly():
     add("主控盒", "PRINT", stand(box_body()))
     add("主控盒盖", "PRINT", stand(box_lid().translate((0, 0, BZ))))
     add("抱杆夹(示意)", "BUY", box(-30, 30, -20.5, 16, BY / 2 - 28, BY / 2 + 28))
+    gw, gh, wy = SCR_W + 2 * SCR_BEZEL_X, SCR_H + 2 * SCR_BEZEL_Y, lid_screen_y()
+    add("7 英寸触摸屏(示意)", "SCREEN", box(-gw / 2, gw / 2, -20.5 - BZ + 0.2, -20.5 - BZ + 2, wy - gh / 2, wy + gh / 2))
     # 称重:横臂 + 固定座 + 条形称重传感器 + 挂钩
     add("抱杆夹横臂(示意)", "BUY", box(-22, XT - 20, -50, 16, z_arm, z_arm + 30))
     mx = XT - 40

@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 330" width="720" height="330" role="img" aria-label="下板槽面加工尺寸图"><style>
+/* 布局:单栏试验规程,按做试验的先后排,表格和图各自横向滚动 */
+:root{
+  --bg:#f3f6f7; --surface:#ffffff; --ink:#12262d; --muted:#56696f; --line:#d3dde0;
+  --accent:#0a6f83; --accent-soft:#dcedf0; --heat:#c2541b; --heat-soft:#fbe9dd; --ok:#1f8a4c; --crit:#c0392b;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif; --mono:"IBM Plex Mono","Consolas",monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f181b; --surface:#162328; --ink:#e3eef0; --muted:#94a9af; --line:#2b3d43;
+  --accent:#4fb9cd; --accent-soft:#17343b; --heat:#f08a4b; --heat-soft:#3a2417; --ok:#4cc27f; --crit:#ef6a5b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f181b; --surface:#162328; --ink:#e3eef0; --muted:#94a9af; --line:#2b3d43;
+  --accent:#4fb9cd; --accent-soft:#17343b; --heat:#f08a4b; --heat-soft:#3a2417; --ok:#4cc27f; --crit:#ef6a5b; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.75;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+header h1{font-size:clamp(26px,5vw,36px);line-height:1.25;margin:0 0 8px;font-weight:700}
+header p{margin:0;color:var(--muted);max-width:44em}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--accent);margin-bottom:10px}
+section{display:flex;flex-direction:column;gap:14px;min-width:0}
+h2{font-size:22px;margin:0;padding-top:20px;border-top:2px solid var(--ink);line-height:1.35}
+h3{font-size:17px;margin:10px 0 0;color:var(--accent)}
+p,ul,ol{margin:0;max-width:44em} ul,ol{padding-left:1.3em} li+li{margin-top:4px}
+a{color:var(--accent)}
+.num,code{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.93em}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface)}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--accent-soft);font-weight:700;white-space:nowrap}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.note{background:var(--heat-soft);border-left:4px solid var(--heat);padding:12px 16px;font-size:15px;max-width:none}
+.note.cool{background:var(--accent-soft);border-color:var(--accent)}
+figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+figcaption{font-size:13px;color:var(--muted)}
+svg text{font-family:var(--sans);fill:var(--ink);font-size:11px} svg .m{fill:var(--muted);font-size:10.5px} svg .d{font-family:var(--mono);font-size:10.5px}
+pre.mermaid{background:var(--surface);border:1px solid var(--line);padding:12px;margin:0;overflow-x:auto}
+.calc{background:var(--surface);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:12px}
+.calc .f{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.calc label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.calc input{font:inherit;font-family:var(--mono);padding:6px 8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:4px;width:100%}
+.calc input:focus-visible{outline:3px solid var(--heat);outline-offset:1px}
+.calc output{font-family:var(--mono);font-size:15px;line-height:1.7}
+.calc output b{font-size:20px}
+
+svg{background:var(--bg,#fff)}</style>
+      <rect width="720" height="330" fill="var(--surface)" stroke="var(--line)"/>
+      <!-- 板:原点左下(60,250),3px/mm,y向上 -->
+      <rect x="60" y="58" width="600" height="192" fill="var(--accent-soft)" stroke="var(--ink)" stroke-width="1.5"/>
+      <!-- 槽中心线:run1 y=+24(顶), run2 y=0, run3 y=-24;中线 y=154 -->
+      <path d="M60 82 H606 A36 36 0 0 1 606 154 H114 A36 36 0 0 0 114 226 H660" fill="none" stroke="var(--accent)" stroke-width="12" stroke-linecap="butt"/>
+      <path d="M60 82 H606 A36 36 0 0 1 606 154 H114 A36 36 0 0 0 114 226 H660" fill="none" stroke="var(--surface)" stroke-width="1" stroke-dasharray="6 4"/>
+      <!-- 螺丝 -->
+      <g fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5">
+        <circle cx="240" cy="118" r="5"/><circle cx="480" cy="118" r="5"/><circle cx="240" cy="190" r="5"/><circle cx="480" cy="190" r="5"/>
+      </g>
+      <!-- 定位销 -->
+      <circle cx="636" cy="70" r="4.5" fill="var(--ink)"/><circle cx="84" cy="238" r="4.5" fill="var(--ink)"/>
+      <!-- NTC孔 -->
+      <rect x="350" y="190" width="6" height="60" fill="var(--crit)"/><rect x="380" y="190" width="6" height="60" fill="var(--crit)"/>
+      <!-- 尺寸 -->
+      <g stroke="var(--muted)" stroke-width="1" fill="none">
+        <path d="M60 270 H660 M60 262 V278 M660 262 V278"/>
+        <path d="M680 58 V250 M672 58 H688 M672 250 H688"/>
+        <path d="M30 82 V154 M24 82 H36 M24 154 H36"/>
+        <path d="M30 154 V226 M24 226 H36"/>
+      </g>
+      <text x="360" y="288" text-anchor="middle" class="d">200</text>
+      <text x="692" y="158" class="d">64</text>
+      <text x="6" y="122" class="d">24</text><text x="6" y="194" class="d">24</text>
+      <text x="610" y="124" class="d">R12</text><text x="82" y="196" class="d">R12</text>
+      <text x="66" y="74" class="m">进液 →</text><text x="600" y="244" class="m">→ 出液</text>
+      <text x="250" y="112" class="m">4×M3(上板通孔,下板攻丝)</text>
+      <text x="560" y="50" class="m">2×Ø3 定位销</text>
+      <text x="392" y="214" class="m">2×Ø2.2 深 20 测温孔(从侧面钻)</text>
+      <text x="60" y="312" class="m">槽面视图,比例一致。尺寸单位 mm。原点取左下角时:三条直槽中心 y = 8、32、56;右弯圆心 (182, 44),左弯圆心 (18, 20)。</text>
+    </svg>

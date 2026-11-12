@@ -8,13 +8,13 @@
 
 | 想做什么 | 看这里 |
 |---|---|
-| 了解整体方案、文献依据、市场上的同类产品 | `docs/design.html` |
-| 采购、接线、烧录、15 步整机测试 | `docs/build-guide.html` |
-| 单独验证加温能力的台架试验 | `docs/bench-test.html`,程序和记录表在 `bench/` |
-| 把零件发给加工厂 | 图纸 `cad/drawings/IW-drawings.pdf`,模型 `cad/out/*.step`,见下面“发给加工厂” |
+| 了解整体方案、文献依据、市场上的同类产品 | [docs/design.md](docs/design.md) |
+| 采购、接线、烧录、15 步整机测试 | [docs/build-guide.md](docs/build-guide.md) |
+| 单独验证加温能力的台架试验 | [docs/bench-test.md](docs/bench-test.md),程序和记录表在 [bench/](bench/) |
+| 把零件发给加工厂 | 图纸 [cad/drawings/IW-drawings.pdf](cad/drawings/IW-drawings.pdf),模型在 [cad/out/](cad/out/),见下面“发给加工厂” |
 | 看整机装配、改零件尺寸 | 运行 `cad/studio.py` |
 
-`docs/` 里的网页直接用浏览器打开。
+上面的文档在 GitHub 上点开就能看。
 
 ## 目录
 
@@ -22,10 +22,11 @@
 |---|---|---|
 | `server/server.py` | 服务器(Python 标准库,无依赖) | `test_flow.py` 27 项通过 |
 | `server/static/` | 配液端、护士站大屏、床旁屏三个页面 | 已在浏览器中查看 |
-| `server/static/panel.html` | 主机面板模拟:OLED 四行显示、三个指示灯、暂停和消音键 | 已在浏览器中用模拟设备操作过;是按固件规则重画的,不是固件在运行 |
+| `server/static/panel.html` | 主机面板模拟:7 英寸触摸屏(里面是真正的床旁页面)、三个指示灯、暂停和消音键 | 已在浏览器中用模拟设备操作过;指示灯是按固件规则重画的,不是固件在运行 |
+| `kiosk/setup-kiosk.sh` | 让盒内树莓派开机全屏显示床旁页面 | 没有在树莓派上运行过 |
 | `server/simulator.py` | 设备模拟器,没有硬件时用 | 已运行 |
 | `firmware/include/logic.h` | 状态机、滴空/堵管/过温/报警判定 | 电脑上单元测试 40 项通过 |
-| `firmware/src/main.cpp` | ESP32 硬件驱动、OLED、联网 | PlatformIO 编译通过;未在硬件上运行 |
+| `firmware/src/main.cpp` | ESP32 硬件驱动、联网 | PlatformIO 编译通过;未在硬件上运行 |
 | `firmware/include/config.h` | Wi-Fi、服务器地址、引脚、阈值 | 烧录前必须修改 |
 | `firmware/host_test/` | 判定逻辑单元测试 | — |
 | `bench/` | 加温台架试验的控制程序和记录表 | 程序未在硬件上运行 |
@@ -43,7 +44,7 @@ python server.py
 python simulator.py http://127.0.0.1:8080 4 20     (另开一个窗口)
 ```
 
-浏览器打开 `http://127.0.0.1:8080/ward`、`/pharmacy`、`/bedside?dev=IW-001`。主机上那块 OLED 小屏和指示灯的样子看 `/panel?dev=IW-001`。
+浏览器打开 `http://127.0.0.1:8080/ward`、`/pharmacy`、`/bedside?dev=IW-001`。主机正面(触摸屏、指示灯、按键)的样子看 `/panel?dev=IW-001`。
 
 ## 看模型、改尺寸
 
@@ -74,7 +75,7 @@ pio device monitor     (输入 help 查看测试命令)
 
 ## 样机与成品的差别
 
-- 床旁触摸屏用平板浏览器代替,主机上只有一块小 OLED。
+- 触摸屏由盒内的树莓派驱动,显示的是服务器上的网页,断网时不更新;成品应把界面做进嵌入式固件。
 - 没有定制电路板,用开发板和现成模块按接线表搭建。
 - 不自动调速,只自动截停。
 - 单颗 ESP32;成品应拆成安全主控和界面主控两颗。

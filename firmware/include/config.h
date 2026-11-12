@@ -8,7 +8,7 @@
 #define DEVICE_ID     "IW-001"                      // 每台设备不同
 
 // ---- 引脚(ESP32-DevKitC)----
-#define PIN_SDA        21   // I2C:ADS1115(0x48)、OLED(0x3C)
+#define PIN_SDA        21   // I2C:ADS1115(0x48);选装 OLED(0x3C)
 #define PIN_SCL        22
 #define PIN_HX_DT      16   // HX711 称重
 #define PIN_HX_SCK     17
@@ -31,6 +31,7 @@
 #define HAS_SCALE      1    // 0 = 不装称重,只按滴数算余量
 #define HAS_BATTERY    0
 #define HAS_LID_SWITCH 1
+#define HAS_OLED       0    // 1 = 另接一块 0.96 吋 SSD1306 小屏作本机状态显示;默认不用,主显示是触摸屏
 
 // ---- 温度 ----
 #define NTC_R0         10000.0f

@@ -54,7 +54,8 @@ const matPr=new THREE.MeshStandardMaterial({color:0x4a9fb3,metalness:0,roughness
 const matBuy=new THREE.MeshStandardMaterial({color:0x7d878c,metalness:.1,roughness:.8,side:THREE.DoubleSide});
 const matSoft=new THREE.MeshStandardMaterial({color:0xbfe6f2,metalness:0,roughness:.4,side:THREE.DoubleSide,transparent:true,opacity:.45,depthWrite:false});
 const matLn=new THREE.LineBasicMaterial({color:0x0b1215});
-const MATS={AL:matAl,PRINT:matPr,BUY:matBuy,SOFT:matSoft},KIND={AL:['#c9d3d8','CNC 铝件'],PRINT:['#4a9fb3','3D 打印件'],BUY:['#7d878c','外购件(示意)'],SOFT:['#bfe6f2','输液袋、滴斗、输液管(示意)']};
+const matScr=new THREE.MeshStandardMaterial({color:0x0a0f12,metalness:.3,roughness:.25,side:THREE.DoubleSide});
+const MATS={AL:matAl,PRINT:matPr,BUY:matBuy,SOFT:matSoft,SCREEN:matScr},KIND={AL:['#c9d3d8','CNC 铝件'],PRINT:['#4a9fb3','3D 打印件'],BUY:['#7d878c','外购件(示意)'],SOFT:['#bfe6f2','输液袋、滴斗、输液管(示意)'],SCREEN:['#0a0f12','触摸屏(示意)']};
 let shown,group,fitNext=true,sec=false,size=[1,1,1];
 function resize(){const m=$('main');renderer.setSize(m.clientWidth,m.clientHeight,false);cam.aspect=m.clientWidth/m.clientHeight;cam.updateProjectionMatrix()}
 addEventListener('resize',resize);
@@ -75,7 +76,7 @@ function show(d){
    <div>定位销 <span class="k">${I.dowels.map(p=>'('+p+')').join(' ')}</span> · 测温孔 x = <span class="k">${I.ntc_x.join(', ')}</span>,高 <span class="k">${I.ntc_z}</span></div>`;
   if(d.multi){const ks=[...new Set(d.parts.map(p=>p.kind))];h+='<div>'+ks.map(k=>`<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KIND[k][0]};margin-right:5px"></span>${KIND[k][1]}`).join('　')+'</div>'}
   $('#hud').innerHTML=h}
-function applySec(){clip.constant=0;[matAl,matPr,matBuy,matSoft,matLn].forEach(m=>{m.clippingPlanes=sec?[clip]:[];m.needsUpdate=true})}
+function applySec(){clip.constant=0;[matAl,matPr,matBuy,matSoft,matScr,matLn].forEach(m=>{m.clippingPlanes=sec?[clip]:[];m.needsUpdate=true})}
 function say(t,c){const m=$('#msg');m.textContent=t;m.className=c||''}
 async function load(){if(busy){again=true;return}busy=true;say('正在生成…');
   try{const id=cur,r=await fetch('/api/mesh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({part:id,params:vals})}),j=await r.json();

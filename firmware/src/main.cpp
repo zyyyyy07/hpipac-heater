@@ -26,7 +26,9 @@
 
 Adafruit_ADS1115 ads;
 HX711 scale;
+#if HAS_OLED
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+#endif
 Preferences prefs;
 Core core;
 
@@ -268,8 +270,9 @@ void serialCmd(String s) {
   else Serial.println("? 输入 help");
 }
 
-// ---------- 显示 ----------
+// ---------- 显示(可选的 OLED 小屏;主显示是触摸屏上的床旁页面) ----------
 void drawOled() {
+#if HAS_OLED
   char l[4][24];
   snprintf(l[0], 24, "%s %s%s", STATE_NAME[core.st], netOk ? "NET" : "---", core.alarms ? " !" : "");
   if (core.tempSet > 0 || core.st == BENCH) snprintf(l[1], 24, "T %.1f/%.1fC", isnan(core.delivered) ? 0 : core.delivered, core.st == BENCH ? core.benchPlate : core.tempSet);
@@ -281,6 +284,7 @@ void drawOled() {
   oled.clearBuffer(); oled.setFont(u8g2_font_7x14B_tr);
   for (int i = 0; i < 4; i++) oled.drawStr(0, 14 + i * 16, l[i]);
   oled.sendBuffer();
+#endif
 }
 
 void setup() {
@@ -294,7 +298,9 @@ void setup() {
   Serial.begin(115200);
   Wire.begin(PIN_SDA, PIN_SCL);
   adsOk = ads.begin(0x48); if (adsOk) { ads.setGain(GAIN_ONE); ads.setDataRate(RATE_ADS1115_250SPS); }
+#if HAS_OLED
   oled.begin();
+#endif
   prefs.begin("iw", false); scaleOffset = prefs.getLong("off", 0); scaleFactor = prefs.getFloat("fac", 420.0f);
   if (HAS_SCALE) scale.begin(PIN_HX_DT, PIN_HX_SCK);
   cmdQ = xQueueCreate(16, sizeof(Cmd)); snapMux = xSemaphoreCreateMutex();
