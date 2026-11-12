@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>护士站大屏 · 输液监控</title>
+<style>
+:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--line:#2a444d;--ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Microsoft YaHei","PingFang SC",sans-serif;padding:16px}
+header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:22px;margin:0}.sum{color:var(--dim)}.sp{flex:1}
+input,button{font:inherit}input{background:#0b1418;border:1px solid var(--line);color:var(--fg);padding:5px 8px;border-radius:5px;width:8em}
+button{background:var(--acc);color:#04222a;border:0;border-radius:5px;padding:5px 10px;cursor:pointer;font-weight:700}
+button.g{background:transparent;color:var(--acc);border:1px solid var(--acc)}button.r{background:var(--crit);color:#fff}
+button:disabled{opacity:.4;cursor:default}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.t{background:var(--card);border-top:8px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.t.ok{border-color:var(--ok)}.t.warn{border-color:var(--warn)}.t.crit{border-color:var(--crit);animation:bl 1s infinite}.t.off{opacity:.55}
+@keyframes bl{50%{background:#40201d}}
+.t h2{margin:0;font-size:20px;display:flex;justify-content:space-between;gap:8px}
+.tag{font-size:14px;padding:1px 8px;border-radius:10px;background:var(--line);white-space:nowrap}
+.ok .tag{background:var(--ok);color:#04220f}.warn .tag{background:var(--warn);color:#2a1c00}.crit .tag{background:var(--crit);color:#fff}
+.k{font-family:Consolas,monospace;font-size:26px;font-weight:700}.k small{font-size:13px;color:var(--dim);font-weight:400}
+.row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.dim{color:var(--dim);font-size:14px}
+.al{color:var(--crit);font-weight:700}.wn{color:var(--warn);font-weight:700}
+.bar{height:8px;background:#0b1418;border-radius:4px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--acc)}
+.ops{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}.ops input{width:4.5em}
+#msg{min-height:1.5em;color:var(--warn);margin:8px 0}
+</style></head><body>
+<header><h1>输液监控 · 护士站</h1><span class="sum" id="sum"></span><span class="sp"></span>
+<label class="dim">操作人 <input id="by" placeholder="工号/姓名"></label><a href="/pharmacy" style="color:var(--acc)">配液端</a></header>
+<div id="msg"></div><div class="grid" id="grid"></div>
+<script>
+const AL={OVERTEMP:['加温过温',2],SENSOR:['温度传感器故障',2],EMPTY:['滴空 已截停',2],FREEFLOW:['流速失控 已截停',2],
+NOFLOW:['不滴/堵管 已截停',2],FLOWDEV:['流速偏差',1],TEMPDEV:['温度偏差',1],LID:['加温盖打开',1],LOWVOL:['余量不足',1],LOWBAT:['电量低',1]};
+const ST={IDLE:'待机',READY:'预热/待确认',RUN:'输液中',PAUSE:'已暂停',DONE:'已完成',FAULT:'故障'};
+const $=s=>document.querySelector(s),by=$('#by');
+try{by.value=localStorage.getItem('by')||''}catch(e){} by.oninput=()=>{try{localStorage.setItem('by',by.value)}catch(e){}};
+const mask=n=>n?n[0]+'**':'';
+async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  const j=await r.json();$('#msg').textContent=r.ok?(j.direct===false?'请求已发送,等待床旁确认':''):j.err;tick();return j}
+function cmd(dev,kind,value){if(!by.value.trim()){$('#msg').textContent='请先填写操作人';return}
+  post('/api/cmd',{dev,kind,value,src:'ward',by:by.value.trim()})}
+function bind(dev){post('/api/device/bind',{dev,bed:document.getElementById('bed-'+dev).value})}
+const open={};
+function tile(d){const L=d.last||{},t=d.task,al=(L.al||[]),sev=Math.max(0,...al.map(a=>(AL[a]||['',1])[1]));
+  let cls=!d.online?'off':sev==2?'crit':(sev==1||d.reqs.length||L.st=='PAUSE')?'warn':(L.st=='RUN'?'ok':'');
+  let tag=!d.online?'设备离线':(ST[L.st]||'—');
+  let h=`<div class="t ${cls}"><h2><span>${d.bed?d.bed+' 床':'未绑定'} ${t?mask(t.patient_name):''}</span><span class="tag">${tag}</span></h2>`;
+  if(!d.bed) h+=`<div class="dim">${d.id}</div><div class="ops"><input id="bed-${d.id}" placeholder="床号"><button onclick="bind('${d.id}')">绑定</button></div>`;
+  else{
+    if(t) h+=`<div class="dim">${t.drug}</div>`;
+    if(L.st=='RUN'||L.st=='PAUSE'){const pct=t?Math.max(0,Math.min(100,100-L.rem/t.volume_ml*100)):0;
+      h+=`<div class="row"><span class="k">${Math.round(L.fl)}<small> / ${Math.round(L.fs)} mL/h</small></span>
+      <span class="k">${L.ts?L.to.toFixed(1):'—'}<small> ${L.ts?'/ '+L.ts.toFixed(1)+' ℃':'不加温'}</small></span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="row dim"><span>余 ${Math.round(L.rem)} mL</span><span>${L.eta>=0?'约 '+(L.eta>=60?Math.floor(L.eta/60)+' 时 ':'')+Math.round(L.eta%60)+' 分':'—'}</span></div>`}
+    else if(t) h+=`<div class="dim">${t.verified?'已核对,等待确认开始':'已下发,待床旁扫码核对'}</div>`;
+    else h+=`<div class="dim">${d.id} · 空闲${L.bat!=null?' · 电量 '+L.bat+'%':''}</div>`;
+    al.forEach(a=>h+=`<div class="${(AL[a]||['',1])[1]==2?'al':'wn'}">⚠ ${(AL[a]||[a])[0]}</div>`);
+    d.reqs.forEach(r=>h+=`<div class="wn">待床旁确认:${{rate:'流速→'+r.value+' mL/h',temp:'温度→'+r.value+' ℃',resume:'恢复输液'}[r.kind]}(${r.by})</div>`);
+    if(d.online&&(L.st=='RUN'||L.st=='PAUSE')){
+      h+=`<div class="ops"><button class="r" ${L.st=='PAUSE'?'disabled':''} onclick="cmd('${d.id}','pause')">暂停</button>
+      <button class="g" onclick="cmd('${d.id}','mute')">消音</button>
+      ${L.st=='PAUSE'?`<button class="g" onclick="cmd('${d.id}','resume')">请求恢复</button>`:''}
+      <button class="g" onclick="open['${d.id}']=!open['${d.id}'];tick()">调整…</button></div>`;
+      if(open[d.id]) h+=`<div class="ops"><input id="r-${d.id}" type="number" placeholder="mL/h"><button onclick="cmd('${d.id}','rate',+document.getElementById('r-${d.id}').value)">请求调速</button>
+      <input id="c-${d.id}" type="number" step="0.5" placeholder="℃"><button onclick="cmd('${d.id}','temp',+document.getElementById('c-${d.id}').value)">请求调温</button></div>`}
+    else if(d.online&&al.length) h+=`<div class="ops"><button class="g" onclick="cmd('${d.id}','mute')">消音</button></div>`;
+  }
+  return h+'</div>'}
+let typing=false;document.addEventListener('focusin',e=>{if(e.target.tagName=='INPUT'&&e.target!==by)typing=true});
+document.addEventListener('focusout',()=>typing=false);
+async function tick(){try{const s=await(await fetch('/api/state')).json();
+  const run=s.devices.filter(d=>d.online&&d.last.st=='RUN').length,alarm=s.devices.filter(d=>d.online&&(d.last.al||[]).some(a=>(AL[a]||['',1])[1]==2)).length;
+  $('#sum').textContent=`输液中 ${run} · 高级报警 ${alarm} · 设备 ${s.devices.length} · ${new Date().toLocaleTimeString()}`;
+  if(!typing)$('#grid').innerHTML=s.devices.map(tile).join('')||'<div class="dim">还没有设备上线。启动设备或运行 simulator.py。</div>';
+ }catch(e){$('#sum').textContent='与服务器断开'}}
+tick();setInterval(tick,1500);
+</script></body></html>

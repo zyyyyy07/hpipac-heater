@@ -1,0 +1,243 @@
+<title>样机制作与测试指南</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* 布局:单栏操作手册,按动手顺序排:买 → 加工 → 接线 → 烧录 → 测试 */
+:root{
+  --bg:#f3f6f7; --surface:#ffffff; --ink:#12262d; --muted:#56696f; --line:#d3dde0;
+  --accent:#0a6f83; --accent-soft:#dcedf0; --heat:#c2541b; --heat-soft:#fbe9dd; --ok:#1f8a4c; --crit:#c0392b;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif; --mono:"IBM Plex Mono","Consolas",monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f181b; --surface:#162328; --ink:#e3eef0; --muted:#94a9af; --line:#2b3d43;
+  --accent:#4fb9cd; --accent-soft:#17343b; --heat:#f08a4b; --heat-soft:#3a2417; --ok:#4cc27f; --crit:#ef6a5b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f181b; --surface:#162328; --ink:#e3eef0; --muted:#94a9af; --line:#2b3d43;
+  --accent:#4fb9cd; --accent-soft:#17343b; --heat:#f08a4b; --heat-soft:#3a2417; --ok:#4cc27f; --crit:#ef6a5b; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.75;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+header h1{font-size:clamp(26px,5vw,36px);line-height:1.25;margin:0 0 8px;font-weight:700}
+header p{margin:0;color:var(--muted);max-width:44em}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--accent);margin-bottom:10px}
+section{display:flex;flex-direction:column;gap:14px;min-width:0}
+h2{font-size:22px;margin:0;padding-top:20px;border-top:2px solid var(--ink);line-height:1.35}
+h3{font-size:17px;margin:10px 0 0;color:var(--accent)}
+p,ul,ol{margin:0;max-width:46em} ul,ol{padding-left:1.3em} li+li{margin-top:4px}
+code,.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.92em}
+code{background:var(--accent-soft);padding:1px 5px;border-radius:3px}
+pre{background:var(--surface);border:1px solid var(--line);padding:12px 14px;margin:0;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.6}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface)}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--accent-soft);font-weight:700;white-space:nowrap}
+td.n{font-family:var(--mono);white-space:nowrap}
+.note{background:var(--heat-soft);border-left:4px solid var(--heat);padding:12px 16px;font-size:15px;max-width:none}
+.note.cool{background:var(--accent-soft);border-color:var(--accent)}
+.y{color:var(--ok);font-weight:700}.n2{color:var(--heat);font-weight:700}
+pre.mermaid{background:var(--surface)}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">样机包 v0.1 · 2026-11-12 · 输液加温监控一体机</div>
+  <h1>样机制作与测试指南</h1>
+  <p>按这份指南可以买齐零件、加工铝板、接线、烧录程序,然后一步步测到整机联网运行。全程用水或生理盐水测试。这是功能样机,不是可以用在病人身上的产品。</p>
+</header>
+
+<section>
+  <h2>1. 包里有什么,哪些已经验证过</h2>
+  <div class="scroll"><table>
+    <tr><th>内容</th><th>位置</th><th>验证情况</th></tr>
+    <tr><td>服务器 + 配液端 + 护士站大屏 + 床旁屏</td><td><code>server/</code></td><td><span class="y">已实际运行。</span>全流程自测 27 项通过(下发、限温、核对、开始、远程调速待确认、暂停、滴空截停、结束、留痕),三个页面在浏览器里看过</td></tr>
+    <tr><td>设备模拟器</td><td><code>server/simulator.py</code></td><td><span class="y">已实际运行。</span>没有硬件时用它演示整套软件</td></tr>
+    <tr><td>固件判定逻辑(滴空、堵管、过温、报警、板温上限)</td><td><code>firmware/include/logic.h</code></td><td><span class="y">已在电脑上编译并跑单元测试,40 项通过</span></td></tr>
+    <tr><td>固件硬件驱动(测温、称重、数滴、夹管阀、加热、联网)</td><td><code>firmware/src/main.cpp</code></td><td><span class="y">已用 PlatformIO 编译通过</span>(ESP32 Arduino 3.3.12,程序占 40%,内存占 16%)。<span class="n2">没有在真实硬件上运行过</span></td></tr>
+    <tr><td>三维模型 8 件(STEP + STL)</td><td><code>cad/out/</code></td><td><span class="y">已生成,实体有效。</span>上下铝板合模后槽与孔的对齐已用程序校验,槽内管长 601 mm。没有实际加工或打印过</td></tr>
+    <tr><td>电路</td><td>本页第 4 节接线表</td><td><span class="n2">没有画定制电路板。</span>样机用现成模块接线,见下面说明</td></tr>
+  </table></div>
+  <p class="note cool">“编译通过”只说明程序语法和库接口正确。引脚接法、传感器读数、夹管阀动作这些只有接上硬件才能验证,所以第 7 节的测试从最基础的上电自检开始,一步一步往上加。</p>
+  <h3>和最终成品的差别</h3>
+  <ul>
+    <li><b>屏幕:</b>样机的床旁触摸屏是一台安卓平板或旧手机,用浏览器打开服务器上的床旁页面。主机上另有一块小 OLED 显示温度、流速、余量和报警,断网时仍可看数。成品要换成嵌入式触摸屏,那部分固件这次没有做。</li>
+    <li><b>电路板:</b>我没有办法在不接触硬件的情况下保证一块定制电路板一次可用,所以这一版用开发板加现成模块搭。接线表就是完整的原理图网表,样机测通后可以交给电路板设计人员照此画板。</li>
+    <li><b>自动调速:</b>样机不自动调流速。屏幕上改的是“设定流速”,护士手调滚轮夹,屏幕显示实测值和偏差,偏差过大报警。自动截停是有的。</li>
+    <li><b>电池:</b>样机先用 12 V 适配器供电。电池和充电管理建议买带认证的成品电池包,在整机测通后再加。</li>
+    <li><b>安全等级:</b>样机用单颗 ESP32。成品应按总方案改成安全主控和界面主控两颗芯片。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>2. 采购清单</h2>
+  <p>价格是粗略估计,仅用于预算。括号里是购物网站上可以搜的关键词。</p>
+  <div class="scroll"><table>
+    <tr><th>#</th><th>零件</th><th>规格</th><th>数量</th><th>约价 元</th></tr>
+    <tr><td class="n">1</td><td>主控板</td><td>ESP32-DevKitC(ESP32-WROOM-32,38 脚)</td><td class="n">1</td><td class="n">25</td></tr>
+    <tr><td class="n">2</td><td>模数转换</td><td>ADS1115 16 位 I2C 模块</td><td class="n">1</td><td class="n">15</td></tr>
+    <tr><td class="n">3</td><td>测温</td><td>10 kΩ B3950 1% NTC,Ø2 mm 环氧或玻封探头带线</td><td class="n">5</td><td class="n">15</td></tr>
+    <tr><td class="n">4</td><td>精密电阻</td><td>10 kΩ 0.1%</td><td class="n">5</td><td class="n">5</td></tr>
+    <tr><td class="n">5</td><td>称重</td><td>5 kg 条形称重传感器 + HX711 模块</td><td class="n">1</td><td class="n">20</td></tr>
+    <tr><td class="n">6</td><td>滴斗传感</td><td>5 mm 940 nm 红外发射管 + 5 mm 光电三极管</td><td class="n">各 2</td><td class="n">5</td></tr>
+    <tr><td class="n">7</td><td>截停</td><td>12 V 常闭电磁夹管阀,适用外径 4 mm 软管(“常闭 夹管阀 12V”)</td><td class="n">1</td><td class="n">60–150</td></tr>
+    <tr><td class="n">8</td><td>功率开关</td><td>MOS 管驱动模块(3.3 V 逻辑可驱动,≥5 A)</td><td class="n">3</td><td class="n">15</td></tr>
+    <tr><td class="n">9</td><td>加热片</td><td>聚酰亚胺薄膜加热片 12 V 15 W,约 50×150 mm,带背胶</td><td class="n">2</td><td class="n">30</td></tr>
+    <tr><td class="n">10</td><td>独立过温保护</td><td>XH-W1209 数显温控模块(12 V,带继电器和探头)</td><td class="n">1</td><td class="n">10</td></tr>
+    <tr><td class="n">11</td><td>机械过温保护</td><td>KSD9700 常闭 45 ℃ 温控开关;72 ℃ 温度保险丝</td><td class="n">各 2</td><td class="n">10</td></tr>
+    <tr><td class="n">12</td><td>显示</td><td>0.96 吋 SSD1306 I2C OLED 128×64</td><td class="n">1</td><td class="n">12</td></tr>
+    <tr><td class="n">13</td><td>声光</td><td>有源蜂鸣器模块(高电平触发);5 mm LED 红黄绿;330 Ω 电阻</td><td class="n">1 套</td><td class="n">8</td></tr>
+    <tr><td class="n">14</td><td>按键</td><td>16 mm 和 12 mm 面板自复位按键</td><td class="n">各 1</td><td class="n">10</td></tr>
+    <tr><td class="n">15</td><td>合盖检测</td><td>干簧管 + 小磁铁</td><td class="n">1</td><td class="n">3</td></tr>
+    <tr><td class="n">16</td><td>电源</td><td>12 V 5 A 适配器;12 V 转 5 V 3 A 降压模块;5 A 保险丝座</td><td class="n">1 套</td><td class="n">45</td></tr>
+    <tr><td class="n">17</td><td>连接器与线</td><td>GX16-8 芯航空插头座 1 对,GX12-4 芯 3 对,DC 座,8 芯硅胶线 1.5 m,续流二极管 1N5819</td><td class="n">1 套</td><td class="n">50</td></tr>
+    <tr><td class="n">18</td><td>保温</td><td>3 mm 气凝胶毡或闭孔泡棉;内径 4–5 mm 泡棉管 25 cm</td><td class="n">1</td><td class="n">20</td></tr>
+    <tr><td class="n">19</td><td>安装</td><td>输液架万向夹(抱杆夹);M5 吊钩;M3、M4、M5 螺丝</td><td class="n">1 套</td><td class="n">40</td></tr>
+    <tr><td class="n">20</td><td>床旁屏</td><td>安卓平板或旧手机 + 支架;USB 或蓝牙扫码枪(键盘模式)</td><td class="n">1</td><td class="n">自备</td></tr>
+    <tr><td class="n">21</td><td>铝板加工</td><td>CNC 两片,见第 3 节</td><td class="n">1 副</td><td class="n">200–400</td></tr>
+    <tr><td class="n">22</td><td>3D 打印</td><td>6 件,PETG</td><td class="n">1 套</td><td class="n">100–200</td></tr>
+  </table></div>
+  <p>测试还需要:经计量的温度计、T 型细热电偶和记录仪、电子天平、输液泵(病房借用)、生理盐水和输液器。详见<a href="https://claude.ai/artifact/J8TDARWF1K3te7iFerLjdk">加温台架试验方案</a>第 3 节。</p>
+</section>
+
+<section>
+  <h2>3. 加工与打印</h2>
+  <div class="scroll"><table>
+    <tr><th>文件(cad/out/)</th><th>做法</th><th>说明</th></tr>
+    <tr><td><code>01_plate_lower_AL6061.step</code></td><td>CNC,6061 铝</td><td>下板。4 个 Ø2.5 孔攻 M3。侧面 2 个 Ø2.2 深 20 测温孔</td></tr>
+    <tr><td><code>02_plate_upper_AL6061.step</code></td><td>CNC,6061 铝</td><td>上板,与下板镜像。4 个 Ø3.4 通孔。侧面 1 个测温孔</td></tr>
+    <tr><td><code>03/04_heater_shell_*.stl</code></td><td>3D 打印 PETG</td><td>加温模块上下壳。铝板面比壳口高约 0.3 mm,保证两片铝板直接贴合</td></tr>
+    <tr><td><code>05_drip_sensor_clip.stl</code></td><td>3D 打印,黑色</td><td>卡在滴斗中部。默认孔径 17 mm,先量你们的滴斗外径,不合适就在三维查看器里改“滴斗外径”</td></tr>
+    <tr><td><code>06_loadcell_mount.stl</code></td><td>3D 打印,100% 填充</td><td>称重传感器固定座。固定端 2×M5,另一端悬空挂钩</td></tr>
+    <tr><td><code>07/08_control_box_*.stl</code></td><td>3D 打印</td><td>主控盒和盖。盖上开了 OLED 窗、3 个 LED、2 个按键、蜂鸣器孔;侧面 5 个接口孔</td></tr>
+  </table></div>
+  <ul>
+    <li>给 CNC 厂的要求:槽用 R2 球头刀,槽面 Ra ≤1.6,槽口去毛刺,合模面平面度 0.05。台架阶段不做阳极氧化。</li>
+    <li>下单前先量输液管外径。槽按外径 4.1 mm 设计,偏差大时在三维查看器里改“单片槽深”。</li>
+    <li>看模型和改尺寸:<code>pip install cadquery</code> 后在 <code>cad</code> 下运行 <code>python studio.py</code>,浏览器打开 <code>http://127.0.0.1:8095</code>。可以旋转、剖切、拖滑块改尺寸,点“保存并导出”后全部 STEP、STL 和铝板加工图按新尺寸重新生成。</li>
+    <li>主控盒只是一个能装下模块的起点,模块的固定位置需要你们按实物在盒底打孔或贴双面胶。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>4. 接线</h2>
+  <h3>电源与加热回路</h3>
+  <pre class="mermaid">
+flowchart LR
+  A[12V 5A 适配器] --> F[5A 保险丝]
+  F --> W[W1209 继电器<br/>常开触点<br/>设 43℃ 加热模式]
+  W --> K[KSD9700<br/>45℃ 常闭<br/>贴在铝板上]
+  K --> TF[72℃ 温度保险丝<br/>贴在铝板上]
+  TF --> H[加热片 ×2 并联]
+  H --> M1[MOS 1<br/>PWM GPIO25]
+  M1 --> M2[MOS 2<br/>总开关 GPIO33]
+  M2 --> G[地]
+  F --> V[夹管阀 12V<br/>并联续流二极管]
+  V --> M3[MOS 3<br/>GPIO27]
+  M3 --> G
+  F --> B[降压 5V] --> E[ESP32 的 5V 脚]
+  F --> W2[W1209 供电]
+  </pre>
+  <p>加热电流要依次通过四道关卡才能到加热片:W1209(独立电子保护,43 ℃ 断开,自身断电也断开)、KSD9700(机械保护)、温度保险丝(一次性)、两只由程序控制的 MOS 管。任何一道断开,加热即停。</p>
+  <h3>信号接线表</h3>
+  <div class="scroll"><table>
+    <tr><th>ESP32 引脚</th><th>接到</th><th>说明</th></tr>
+    <tr><td class="n">3V3</td><td>ADS1115 VDD、OLED VCC、HX711 VCC、所有 NTC 上端、ADS1115 A3</td><td>A3 直接量 3.3 V 电源,用作比例测量基准</td></tr>
+    <tr><td class="n">GND</td><td>所有模块地、12 V 电源负极</td><td>必须共地</td></tr>
+    <tr><td class="n">GPIO21 / 22</td><td>SDA / SCL</td><td>ADS1115(地址 0x48,ADDR 接地)和 OLED 并联</td></tr>
+    <tr><td class="n">ADS A0</td><td>板温 NTC 1(控制)分压点</td><td rowspan="3">每路:3.3 V — NTC — 分压点 — 10 kΩ 0.1% — 地。分压点对地并 100 nF</td></tr>
+    <tr><td class="n">ADS A1</td><td>板温 NTC 2(保护)分压点</td></tr>
+    <tr><td class="n">ADS A2</td><td>出口管壁 NTC 分压点</td></tr>
+    <tr><td class="n">GPIO36</td><td>环境 NTC 分压点</td><td>同样的分压接法。探头放在药袋附近</td></tr>
+    <tr><td class="n">GPIO16 / 17</td><td>HX711 DT / SCK</td><td>称重传感器四线接 HX711 的 E+ E− A+ A−</td></tr>
+    <tr><td class="n">GPIO26</td><td>150 Ω → 红外发射管正极,负极接地</td><td>约 13 mA</td></tr>
+    <tr><td class="n">GPIO34</td><td>光电三极管集电极;集电极另经 10 kΩ 上拉到 3.3 V,发射极接地</td><td>发射管和接收管在滴斗夹里正对</td></tr>
+    <tr><td class="n">GPIO25</td><td>MOS 1 信号</td><td>加热 PWM。栅极对地 10 kΩ 下拉(模块一般自带)</td></tr>
+    <tr><td class="n">GPIO33</td><td>MOS 2 信号</td><td>加热总开关</td></tr>
+    <tr><td class="n">GPIO27</td><td>MOS 3 信号</td><td>夹管阀。通电打开,断电夹闭</td></tr>
+    <tr><td class="n">GPIO14</td><td>蜂鸣器模块信号</td><td></td></tr>
+    <tr><td class="n">GPIO18 / 23 / 19</td><td>红 / 黄 / 绿 LED,各串 330 Ω 到地</td><td></td></tr>
+    <tr><td class="n">GPIO32</td><td>暂停键,另一端接地</td><td>输液中按一下暂停,暂停时按一下恢复,完成后按一下结束</td></tr>
+    <tr><td class="n">GPIO13</td><td>消音键,另一端接地</td><td></td></tr>
+    <tr><td class="n">GPIO35</td><td>干簧管一端,另一端接地;GPIO35 经 10 kΩ 上拉到 3.3 V</td><td>磁铁装在上壳。不装时把 config.h 里 HAS_LID_SWITCH 设 0</td></tr>
+  </table></div>
+  <h3>加温模块 8 芯线缆</h3>
+  <p>加热正、加热负(各用 2 芯并联也可以,电流 2.5 A);NTC 1、NTC 2、出口 NTC 各 1 芯 + 公共 3.3 V 1 芯;干簧管 1 芯 + 地 1 芯。W1209 的探头单独走线插进上板的测温孔。KSD9700 和温度保险丝贴在下板外侧,串在加热正线里。</p>
+  <p class="note">两只板温 NTC 插进下板的两个测温孔,孔里填导热硅脂,孔口点胶固定。这两只读数相差超过 1.5 ℃ 程序会判传感器故障,所以两只都要插到底。</p>
+</section>
+
+<section>
+  <h2>5. 烧录固件</h2>
+  <ol>
+    <li>安装 VS Code 和 PlatformIO 插件,或命令行 <code>pip install platformio</code>。</li>
+    <li>打开 <code>firmware</code>,编辑 <code>include/config.h</code>:填 Wi-Fi 名称和密码、服务器电脑的 IP、设备编号。</li>
+    <li>用 USB 线连接 ESP32,运行:</li>
+  </ol>
+  <pre>pio run -t upload
+pio device monitor</pre>
+  <p>在 Windows 上请把 <code>firmware</code> 文件夹放到很短的路径下(例如 <code>D:\iw\firmware</code>)。我在一个很深的文件夹里第一次编译时,因为 Windows 路径长度限制而安装库失败,换到短路径后通过。</p>
+  <p>串口里输入 <code>help</code> 可以看到全部测试命令。<b>第一次上电不要接加热片和夹管阀</b>,先做下面的 T1–T3。</p>
+</section>
+
+<section>
+  <h2>6. 运行服务器</h2>
+  <p>任意一台装了 Python 3.9 以上的电脑,和设备在同一个 Wi-Fi 下。不需要安装任何依赖。</p>
+  <pre>cd server
+python server.py</pre>
+  <ul>
+    <li>配液端:<code>http://电脑IP:8080/pharmacy</code></li>
+    <li>护士站大屏:<code>http://电脑IP:8080/ward</code></li>
+    <li>床旁屏(平板上打开):<code>http://电脑IP:8080/bedside?dev=IW-001</code></li>
+    <li>没有硬件时先看效果:另开一个窗口运行 <code>python simulator.py http://127.0.0.1:8080 4 20</code>,会出现 4 台模拟设备,时间加速 20 倍。</li>
+    <li>自测:<code>python test_flow.py</code>,最后一行应为 ALL PASS。</li>
+  </ul>
+  <p>设备第一次上线会出现在大屏上显示“未绑定”,在那里填床号绑定。药品加温上限表在 <code>server.py</code> 顶部的 <code>DRUGS</code>,现在是演示数值,必须由药剂科审核后替换。</p>
+  <p class="note">样机服务器没有登录和加密,页面也没有对输入做转义。只能在单独的测试网络里用,不要接入医院业务网,不要录入真实病人信息。</p>
+</section>
+
+<section>
+  <h2>7. 整机分步测试</h2>
+  <p>加温台架试验已经并进来:T6、T7 就是原方案的 S2、S3,用同一套整机硬件完成,不需要另搭台架。每一步通过再做下一步。串口命令在 <code>pio device monitor</code> 里输入。</p>
+  <div class="scroll"><table>
+    <tr><th>步骤</th><th>内容</th><th>做法</th><th>通过标准</th></tr>
+    <tr><td class="n">T1</td><td>上电自检</td><td>不接加热片和夹管阀。上电,输入 <code>status</code></td><td>OLED 有显示;<code>ads=1</code>;三路温度接近室温;红黄绿灯和蜂鸣器不乱响</td></tr>
+    <tr><td class="n">T2</td><td>温度校准</td><td>所有 NTC 和 W1209 探头捆在一起,放入 37 ℃ 和 41 ℃ 水中,与精密温度计比对。偏差填进 config.h 的 OFFSET_ 项后重新烧录。W1209 用 P4 参数修正,设为加热模式 43.0 ℃、回差 2 ℃</td><td>校准后各路与标准温度计相差 ≤0.2 ℃;水温升到 43 ℃ 时 W1209 继电器断开</td></tr>
+    <tr><td class="n">T3</td><td>称重</td><td>空钩 <code>tare</code>;挂 500 g 砝码(或一袋称过的盐水)<code>cal 500</code>;再挂 100、250 g 核对</td><td>误差 ≤2 g</td></tr>
+    <tr><td class="n">T4</td><td>数滴</td><td>装好输液器和滴斗夹,重力滴注。<code>raw 1</code> 看信号,液滴经过时 raw 与 base 之差应远大于 noise;据此调 config.h 的 DROP_MIN_DELTA。分别在约 20、60、120 滴/分下人工数 100 滴,与 <code>status</code> 里的 drops 比较</td><td>100 滴误差 ≤2 滴;关灯、开灯、手电照射下都不误计</td></tr>
+    <tr><td class="n">T5</td><td>夹管阀</td><td>接上夹管阀。药袋挂 1 m 高,滚轮夹全开。<code>clamp 1</code> 应流,<code>clamp 0</code> 应停。保持 <code>clamp 1</code> 1 小时后摸阀体</td><td>夹闭时 5 分钟内一滴不漏;阀体表面 ≤50 ℃;拔掉电源立即夹闭</td></tr>
+    <tr><td class="n">T6</td><td>加热空载</td><td>接上加热回路,管内充水不流动。<code>log 1</code>,<code>plate 41</code></td><td>到 40 ℃ ≤5 分钟;过冲 ≤0.5 ℃;稳定后两只 NTC 相差 ≤0.5 ℃;任何时刻板温 ≤41.5 ℃</td></tr>
+    <tr><td class="n">T7</td><td>稳态换热(核心)</td><td><code>plate 41</code>。输液泵依次 60、120、250、500 mL/h,在进口、出口、出口后 25 cm 三处用热电偶测液温。做法和记录表见台架方案 S2、S3</td><td>250 mL/h 出口 ≥39 ℃;500 mL/h 出口 ≥37 ℃;换热能力 UA ≥0.75 W/K。把实测 UA 填进 config.h</td></tr>
+    <tr><td class="n">T8</td><td>外表面温度</td><td><code>plate 41</code> 稳定 30 分钟,测外壳各处、线缆出口、裸露的铝板边缘</td><td>外壳 ≤38 ℃;任何手能碰到的地方 ≤41 ℃</td></tr>
+    <tr><td class="n">T9</td><td>单机完整输液</td><td>挂一袋 250 mL 盐水,滚轮夹调到约 40 滴/分。<code>start 250 120 37 20</code>。运行中对比:屏幕流速与天平称得的流速;屏幕余量与实际</td><td>流速误差 ≤10%;余量误差 ≤10 mL;穿刺点液温 37±1 ℃</td></tr>
+    <tr><td class="n">T10</td><td>滴空自动截停</td><td>接 T9,让它一直输到袋空</td><td>余量不足时黄灯预警;停滴 20 秒内夹管阀夹闭、红灯、蜂鸣器急促响;此时滴斗下方管路里仍充满液体,没有进气</td></tr>
+    <tr><td class="n">T11</td><td>故障注入</td><td>输液中分别:(a) 用手捏死管路 (b) 把滚轮夹突然全开 (c) 打开加温盖 (d) 拔掉一只板温 NTC (e) 拔电源 (f) 关掉 Wi-Fi</td><td>(a) 约 20 秒后截停并报“不滴” (b) 15 秒后截停并报“流速失控” (c) 停止加热并报警,输液继续 (d) 停止加热并截停 (e) 夹管阀立即夹闭 (f) 设备照常工作,OLED 显示断网</td></tr>
+    <tr><td class="n">T12</td><td>失控加热</td><td>管内不流动。把 MOS 1 和 MOS 2 的输出端直接短接到地,让加热片全功率常开。人不要离开</td><td>W1209 在 43–44 ℃ 断开;板温峰值 ≤46 ℃。再把 W1209 也短接:KSD9700 应在约 45–50 ℃ 断开</td></tr>
+    <tr><td class="n">T13</td><td>联网全流程</td><td>启动服务器。配液端下发任务 → 平板床旁屏扫腕带和药袋码 → 确认开始 → 大屏查看 → 大屏点暂停 → 床旁恢复 → 大屏请求调速 → 床旁确认</td><td>每一步两边显示一致;大屏暂停后 3 秒内夹管阀夹闭;调速在床旁确认前不生效;腕带或药袋码不符时不能开始</td></tr>
+    <tr><td class="n">T14</td><td>多台与断线</td><td>真机 + 模拟器 4 台同时运行 2 小时;中途关掉服务器 5 分钟再打开</td><td>大屏显示离线;设备输液和报警不受影响;服务器恢复后自动重连</td></tr>
+    <tr><td class="n">T15</td><td>擦拭消毒</td><td>75% 乙醇湿巾擦拭外壳和加温槽 200 次</td><td>无开裂、发白、字迹脱落;功能正常</td></tr>
+  </table></div>
+  <p class="note">T12 是故意让加热失控的试验。旁边不放易燃物。板温超过 60 ℃ 保护仍未动作时立即拔电源,并检查 W1209 和 KSD9700 的接线。</p>
+</section>
+
+<section>
+  <h2>8. 关于烫伤和安全</h2>
+  <ul>
+    <li><b>正常工作时最热的地方就是铝板本身,41 ℃。</b>它被 3 mm 保温层和塑料外壳包在里面。外壳表面估计 30–35 ℃,比体温低。T8 会实测。</li>
+    <li><b>单一故障时:</b>程序在 42 ℃ 锁定停止加热;W1209 在 43 ℃ 独立切断;KSD9700 在约 45 ℃ 机械切断;温度保险丝 72 ℃ 兜底。T12 会实测板温峰值。</li>
+    <li><b>对药液:</b>加热面不超过 41 ℃,所以即使流速降到零,管里的药液也不会超过 41 ℃。单元测试已验证程序在任何流速、目标和环境温度组合下给出的板温设定都不超过 41 ℃。</li>
+    <li><b>电气:</b>加温模块和线缆上只有 12 V 低压。样机适配器是普通适配器,成品必须换成符合 GB 9706.1 的医用适配器。</li>
+    <li><b>断电和死机:</b>夹管阀断电即夹闭。程序卡死 5 秒看门狗复位,复位后加热关闭、夹管阀夹闭。</li>
+  </ul>
+  <p>以上是按医用电气安全标准的思路做的设计,不等于达标。是否符合 GB 9706.1 等标准,只能由有资质的检测机构对实物做型式检验后才能下结论。</p>
+</section>
+
+<section>
+  <h2>9. 已知的风险点</h2>
+  <ul>
+    <li>夹管阀能否把较硬的 PVC 输液管夹死,要看买到的型号,T5 不通过就换夹持力更大的型号或在夹口处换一小段硅胶管。</li>
+    <li>ESP32 自带模数转换精度有限,滴斗信号的阈值需要按 T4 实际调整。</li>
+    <li>药袋晃动会干扰称重。程序用了 2 分钟线性回归来平滑,转运途中余量读数仍可能跳动。</li>
+    <li>袋装药液通常有 5–10% 的过量灌装,所以“余量”到 0 后还会再滴一会儿。滴空判定要求停滴和余量低同时成立,不受这个影响。</li>
+    <li>出口管壁温度(NTC 3)目前只记录,不参与控制。到达温度是按模型估算的,T7 实测后需要用数据修正模型里的 UA 和散热系数。</li>
+  </ul>
+</section>
+</div>

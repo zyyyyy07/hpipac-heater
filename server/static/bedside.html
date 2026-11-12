@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>床旁屏</title>
+<style>
+:root{--bg:#0b1519;--card:#16292f;--fg:#e8f3f5;--dim:#8fa7ae;--line:#2b464f;--ok:#2fa866;--warn:#e7ab2f;--crit:#e2503f;--acc:#49b8cc;--heat:#ffa262}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.45 "Microsoft YaHei","PingFang SC",sans-serif;padding:14px;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;justify-content:space-between;color:var(--dim);font-size:15px;gap:10px;flex-wrap:wrap}
+.pt{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}.pt b{font-size:26px}
+.state{padding:3px 14px;border-radius:16px;font-weight:700;background:var(--line)}.state.RUN{background:var(--ok)}.state.PAUSE,.state.DONE{background:var(--crit)}.state.READY{background:var(--warn);color:#2a1c00}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--card);border-radius:10px;padding:14px}.tile small{color:var(--dim);display:block;font-size:14px}
+.v{font-family:Consolas,monospace;font-size:clamp(40px,9vw,72px);font-weight:700;line-height:1.1}.v i{font-style:normal;font-size:17px;color:var(--dim);margin-left:6px}
+.heat .v{color:var(--heat)}
+.bar{height:14px;background:var(--card);border-radius:7px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+.row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--dim)}
+.alarm{background:var(--crit);color:#fff;font-weight:700;padding:10px 14px;border-radius:8px;font-size:20px}.alarm.w{background:var(--warn);color:#2a1c00}
+.btns{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:auto}
+button,input{font:inherit}button{border:0;border-radius:10px;padding:16px 6px;font-weight:700;cursor:pointer;background:var(--card);color:var(--fg);border:1px solid var(--line)}
+button.stop{background:var(--crit);border-color:var(--crit);color:#fff}button.go{background:var(--ok);border-color:var(--ok);color:#fff}
+input{background:#081014;border:1px solid var(--line);color:var(--fg);padding:12px;border-radius:8px;width:100%}
+.panel{background:var(--card);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px}.kv span:nth-child(odd){color:var(--dim)}
+.pop{position:fixed;inset:0;background:rgba(5,10,12,.9);display:flex;align-items:center;justify-content:center;padding:20px}
+.pop>div{background:var(--card);border:3px solid var(--heat);border-radius:14px;padding:22px;max-width:520px;width:100%;display:flex;flex-direction:column;gap:14px}
+.pop h3{margin:0;color:var(--heat);font-size:22px}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.adj{display:grid;grid-template-columns:1fr 2fr 1fr;gap:10px;align-items:center;text-align:center}
+#err{color:var(--warn);min-height:1.4em}[hidden]{display:none!important}
+</style></head><body>
+<div class="top"><span id="where"></span><span id="conn"></span></div>
+<div id="main" style="display:flex;flex-direction:column;gap:12px;flex:1"></div>
+<div id="err"></div>
+<div class="pop" id="pop" hidden><div><h3 id="pt"></h3><div id="pb"></div><div class="two"><button class="go" id="py">确认执行</button><button id="pn">拒绝</button></div></div></div>
+<div class="pop" id="adj" hidden><div><h3 id="at"></h3><div class="adj"><button id="am">−</button><div class="v" id="av"></div><button id="ap">＋</button></div>
+<div class="dim" id="ah" style="color:var(--dim)"></div><div class="two"><button class="go" id="ay">确定</button><button id="an">取消</button></div></div></div>
+<script>
+const dev=new URLSearchParams(location.search).get('dev')||'IW-001',$=s=>document.querySelector(s);
+const AL={OVERTEMP:['加温过温,已停止加热并截停',2],SENSOR:['温度传感器故障,已停止加热',2],EMPTY:['药液滴空,已自动截停',2],FREEFLOW:['流速失控,已自动截停',2],
+NOFLOW:['不滴或堵管,已自动截停,请检查管路',2],FLOWDEV:['流速偏离设定,请调节滚轮夹',1],TEMPDEV:['温度偏离设定',1],LID:['加温盖未合上',1],LOWVOL:['余量不足,即将输完',1],LOWBAT:['电量低,请接电源',1]};
+const ST={IDLE:'待机',READY:'预热中',RUN:'输液中',PAUSE:'已暂停',DONE:'已完成',FAULT:'故障'};
+let cur=null,nurse='';try{nurse=localStorage.getItem('nurse')||''}catch(e){}
+async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}),j=await r.json();
+  $('#err').textContent=r.ok?'':j.err;tick();return r.ok}
+const cmd=(kind,value)=>post('/api/cmd',{dev,kind,value,src:'bedside',by:nurse});
+function verify(){nurse=$('#nurse').value.trim();if(!nurse){$('#err').textContent='请填写护士工号';return}
+  try{localStorage.setItem('nurse',nurse)}catch(e){}
+  post('/api/bedside/verify',{dev,patient_id:$('#pid').value,bag_code:$('#bag').value,by:nurse})}
+function adjust(kind){const t=cur.task,L=cur.last;let v=kind=='rate'?L.fs:(L.ts||33),step=kind=='rate'?5:0.5,lo=kind=='rate'?5:33,hi=kind=='rate'?1000:(t?t.temp_max:41);
+  $('#at').textContent=kind=='rate'?'设定流速 mL/h':'设定温度 ℃';$('#ah').textContent=kind=='rate'?'本样机不自动调速:改设定后请手调滚轮夹,屏幕显示实际流速与偏差。':`本药品加温上限 ${hi} ℃`;
+  const show=()=>$('#av').textContent=kind=='rate'?Math.round(v):v.toFixed(1);show();
+  $('#am').onclick=()=>{v=Math.max(lo,v-step);show()};$('#ap').onclick=()=>{v=Math.min(hi,v+step);show()};
+  $('#ay').onclick=()=>{$('#adj').hidden=true;cmd(kind,v)};$('#an').onclick=()=>$('#adj').hidden=true;$('#adj').hidden=false}
+function render(d){const L=d.last||{},t=d.task,m=$('#main');
+  $('#where').textContent=(d.bed?d.bed+' 床 · ':'未绑定床位 · ')+dev;
+  $('#conn').textContent=(d.online?'设备在线':'设备离线')+(L.bat!=null?' · 电量 '+L.bat+'%':'');
+  const alarms=(L.al||[]).map(a=>`<div class="alarm ${(AL[a]||['',1])[1]==2?'':'w'}">⚠ ${(AL[a]||[a])[0]}</div>`).join('');
+  const key=[L.st,t&&t.id,t&&t.verified,d.online].join();
+  if(L.st=='RUN'||L.st=='PAUSE'){const pct=t?Math.max(0,Math.min(100,100-L.rem/t.volume_ml*100)):0;
+    m.innerHTML=`<div class="pt"><span><b>${t?t.patient_name:''}</b> · 住院号 ${t?t.patient_id:''}</span><span class="state ${L.st}">${ST[L.st]}</span></div>
+    <div>${t?t.drug:''}</div>${alarms}
+    <div class="tiles"><div class="tile heat"><small>到达温度(估算)/ 设定</small><div class="v">${L.ts?L.to.toFixed(1):'—'}<i>${L.ts?'/ '+L.ts.toFixed(1)+' ℃':'不加温'}</i></div></div>
+    <div class="tile"><small>流速 / 设定 · ${Math.round(L.dpm)} 滴/分</small><div class="v">${Math.round(L.fl)}<i>/ ${Math.round(L.fs)} mL/h</i></div></div></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="row"><span>剩余 ${Math.round(L.rem)} mL</span><span>预计剩余 <b style="color:var(--fg)">${L.eta>=0?(L.eta>=60?Math.floor(L.eta/60)+' 小时 ':'')+Math.round(L.eta%60)+' 分钟':'—'}</b></span></div>
+    <div class="btns"><button onclick="adjust('temp')" ${t&&t.temp_max?'':'disabled'}>温度</button><button onclick="adjust('rate')">流速</button><button onclick="cmd('mute')">消音</button>
+    ${L.st=='RUN'?`<button class="stop" onclick="cmd('pause')">暂停</button>`:`<button class="go" onclick="cmd('resume')">恢复</button>`}</div>`;
+  }else if(L.st=='DONE'){m.innerHTML=`${alarms}<div class="panel"><b style="font-size:24px">本袋输液已结束,管路已截停</b><div>请更换药袋或拔针后,按“结束”让设备回到待机。</div></div>
+    <div class="btns"><span></span><span></span><button onclick="cmd('mute')">消音</button><button class="go" onclick="cmd('finish')">结束</button></div>`;
+  }else if(t&&m.dataset.key!==key){
+    const info=`<div class="kv"><span>病人</span><span>${t.patient_name} · 住院号 ${t.patient_id}</span><span>药品</span><span>${t.drug}</span>
+      <span>容量 / 流速</span><span>${t.volume_ml} mL · ${t.rate_mlh} mL/h · 滴系数 ${t.drip_factor}</span><span>加温</span><span>${t.temp_c?t.temp_c+' ℃':'不加温'} ${t.note?'('+t.note+')':''}</span></div>`;
+    m.innerHTML=t.verified?`<div class="pt"><b>核对一致,请最后确认</b><span class="state READY" id="pre"></span></div><div class="panel">${info}</div>
+      <div>确认:药袋已挂好,滴斗已卡入,管路已压入加温槽并合盖,滚轮夹已调好。</div>
+      <div class="btns"><span></span><span></span><button onclick="cmd('cancel')">取消任务</button><button class="go" onclick="post('/api/bedside/start',{dev,by:nurse})">确认开始</button></div>`
+     :`<div class="pt"><b>新输液任务</b><span class="state READY" id="pre"></span></div><div class="panel">${info}</div>
+      <div class="panel"><input id="nurse" placeholder="护士工号" value="${nurse}"><input id="pid" placeholder="扫描病人腕带" autofocus><input id="bag" placeholder="扫描药袋条码">
+      <button class="go" onclick="verify()">核对</button></div>`;
+  }else if(!t&&L.st!='READY'){m.innerHTML=`${alarms}<div class="panel"><b style="font-size:24px">待机</b><div>等待配液端下发任务。</div></div>`}
+  m.dataset.key=key;
+  const pre=$('#pre');if(pre)pre.textContent=t&&t.temp_c?`预热 ${L.tp!=null?L.tp.toFixed(1):'—'} ℃`:'不加温';
+  const r=d.reqs[0],pop=$('#pop');
+  if(r){$('#pt').textContent='护士站请求:'+{rate:'调整流速',temp:'调整温度',resume:'恢复输液'}[r.kind];
+    $('#pb').innerHTML=(r.kind=='rate'?`由 ${Math.round(L.fs)} mL/h 调整为 <b>${r.value} mL/h</b>`:r.kind=='temp'?`由 ${L.ts} ℃ 调整为 <b>${r.value} ℃</b>`:'请先查看病人和管路')+`<br>操作人:${r.by} · 需床旁确认`;
+    const ans=a=>post('/api/request/answer',{dev,req:r.id,accept:a,by:nurse});$('#py').onclick=()=>ans(true);$('#pn').onclick=()=>ans(false)}
+  pop.hidden=!r}
+async function tick(){try{const s=await(await fetch('/api/state')).json();cur=s.devices.find(d=>d.id==dev);
+  if(cur)render(cur);else $('#main').innerHTML='<div class="panel">设备 '+dev+' 还没有上线。</div>'}catch(e){$('#conn').textContent='与服务器断开'}}
+tick();setInterval(tick,1000);
+</script></body></html>

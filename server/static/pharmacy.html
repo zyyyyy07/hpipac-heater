@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>配液端 · 输液任务下发</title>
+<style>
+:root{--bg:#f3f6f7;--card:#fff;--fg:#12262d;--dim:#56696f;--line:#d3dde0;--acc:#0a6f83;--warn:#b77a00;--crit:#c0392b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Microsoft YaHei","PingFang SC",sans-serif;padding:20px}
+.wrap{max-width:1000px;margin:0 auto}h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:24px 0 8px}
+.dim{color:var(--dim);font-size:14px}a{color:var(--acc)}
+form{background:var(--card);border:1px solid var(--line);padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px}
+label{display:flex;flex-direction:column;font-size:14px;color:var(--dim);gap:3px}
+input,select,button{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--fg)}
+button{background:var(--acc);color:#fff;border:0;font-weight:700;cursor:pointer;align-self:end}
+#hint{grid-column:1/-1;font-size:14px;color:var(--warn);min-height:1.4em}#msg{grid-column:1/-1;min-height:1.4em;font-weight:700}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;background:var(--card);font-size:14px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;white-space:nowrap}th{background:#dcedf0}
+</style></head><body><div class="wrap">
+<h1>配液端 · 输液任务下发</h1>
+<div class="dim">样机页面,手工录入。接入 HIS 后由医嘱自动生成。<a href="/ward">护士站大屏</a></div>
+<form id="f">
+<label>床号<input name="bed" required></label>
+<label>病人姓名<input name="patient_name" required></label>
+<label>住院号(腕带码)<input name="patient_id" required></label>
+<label style="grid-column:span 2">药品<input name="drug" id="drug" required placeholder="例:0.9% 氯化钠 250 mL + 头孢呋辛 1.5 g"></label>
+<label>容量 mL<input name="volume_ml" type="number" value="250" min="10" max="3000" required></label>
+<label>流速 mL/h<input name="rate_mlh" type="number" value="120" min="5" max="1000" required></label>
+<label>加温目标 ℃(0 = 不加温)<input name="temp_c" id="temp" type="number" value="37" step="0.5" min="0" max="41"></label>
+<label>输液器滴系数<select name="drip_factor"><option>20</option><option>15</option><option>60</option></select></label>
+<label>药袋条码<input name="bag_code" required></label>
+<label>配液人<input name="by" required></label>
+<button>下发任务</button><div id="hint"></div><div id="msg"></div></form>
+<h2>最近任务</h2><div class="scroll"><table id="tb"></table></div>
+<h2>药品加温上限表(示例,须由药剂科审核)</h2><div class="scroll"><table id="dr"></table></div>
+</div><script>
+const $=s=>document.querySelector(s);let drugs=[];
+const SS={pending:'待执行',running:'输液中',paused:'已暂停',done:'已完成',cancelled:'已取消'};
+function hint(){const n=$('#drug').value,hit=drugs.filter(d=>n.includes(d.kw));let lim=37,kw='未登记药品(默认)';
+  if(hit.length){const m=hit.reduce((a,b)=>a.max<b.max?a:b);lim=m.max;kw=m.kw}
+  $('#hint').textContent=n?(lim==0?`含“${kw}”:禁止加温,下发时温度将设为 0`:`${kw}:加温上限 ${lim} ℃,超过会自动降到上限`):''}
+$('#drug').oninput=hint;
+$('#f').onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.target));
+  const r=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}),j=await r.json();
+  $('#msg').style.color=r.ok?'#1f8a4c':'#c0392b';
+  $('#msg').textContent=r.ok?`已下发 ${j.task.id}:${j.task.temp_c?j.task.temp_c+' ℃':'不加温'}。${j.task.note} ${j.assigned?'':'该床位尚未绑定设备,设备绑定后自动领取。'}`:j.err;load()};
+async function load(){const s=await(await fetch('/api/state')).json();drugs=s.drugs;hint();
+  $('#tb').innerHTML='<tr><th>任务</th><th>床</th><th>病人</th><th>药品</th><th>容量</th><th>流速</th><th>温度</th><th>药袋码</th><th>状态</th><th>备注</th></tr>'+
+   s.tasks.map(t=>`<tr><td>${t.id}</td><td>${t.bed}</td><td>${t.patient_name}</td><td>${t.drug}</td><td>${t.volume_ml}</td><td>${t.rate_mlh}</td><td>${t.temp_c||'不加温'}</td><td>${t.bag_code}</td><td>${SS[t.status]}</td><td>${t.note||''}</td></tr>`).join('');
+  $('#dr').innerHTML='<tr><th>药名关键字</th><th>加温上限 ℃</th></tr>'+drugs.map(d=>`<tr><td>${d.kw}</td><td>${d.max||'禁止加温'}</td></tr>`).join('')}
+load();setInterval(load,3000);
+</script></body></html>
