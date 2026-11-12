@@ -113,7 +113,8 @@ pre.mermaid{background:var(--surface)}
   <ul>
     <li>给 CNC 厂的要求:槽用 R2 球头刀,槽面 Ra ≤1.6,槽口去毛刺,合模面平面度 0.05。台架阶段不做阳极氧化。</li>
     <li>下单前先量输液管外径。槽按外径 4.1 mm 设计,偏差大时在三维查看器里改“单片槽深”。</li>
-    <li>看模型和改尺寸:<code>pip install cadquery</code> 后在 <code>cad</code> 下运行 <code>python studio.py</code>,浏览器打开 <code>http://127.0.0.1:8095</code>。可以旋转、剖切、拖滑块改尺寸,点“保存并导出”后全部 STEP、STL 和铝板加工图按新尺寸重新生成。</li>
+    <li>发给加工厂:图纸在 <code>cad/drawings/IW-drawings.pdf</code>(每个零件一张 A3,含孔表、公差和技术要求),二维线稿在 <code>cad/drawings/dxf/</code>,三维模型在 <code>cad/out/</code>。图纸由脚本生成,下单前请加工厂确认。</li>
+    <li>看模型和改尺寸:<code>pip install cadquery reportlab ezdxf</code> 后在 <code>cad</code> 下运行 <code>python studio.py</code>,浏览器打开 <code>http://127.0.0.1:8095</code>。可以旋转、剖切、拖滑块改尺寸,点“保存并导出”后全部 STEP、STL 和铝板加工图按新尺寸重新生成。</li>
     <li>主控盒只是一个能装下模块的起点,模块的固定位置需要你们按实物在盒底打孔或贴双面胶。</li>
   </ul>
 </section>

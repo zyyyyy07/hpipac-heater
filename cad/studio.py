@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """三维查看器:在浏览器里旋转查看每个零件,改尺寸后立即重新生成,满意后保存并导出 STEP/STL。
-依赖: pip install cadquery       运行: python studio.py       然后打开 http://127.0.0.1:8095
+依赖: pip install cadquery reportlab ezdxf       运行: python studio.py       然后打开 http://127.0.0.1:8095
 """
 import json, os, sys, threading, traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -40,8 +40,8 @@ def save(params):
     b.export_all(lines.append)
     try:
         import drawings
-        drawings.write_all()
-        lines.append("铝板加工图已更新: drawings/plate_lower.svg, plate_upper.svg")
+        drawings.write_all(lambda s: None)
+        lines.append("图纸包已更新: drawings/IW-drawings.pdf 和 drawings/dxf/")
     except Exception as e:                      # 图纸生成失败不影响模型导出
         lines.append(f"加工图未更新: {e}")
     return {"ok": True, "log": lines, "out": b.OUT}
