@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""hPIPAC 前端加热系统 · 样机服务器(只用 Python 标准库,python server.py 即可运行)
+"""hPIPAC 前端加热系统 · 盒内服务程序(只用 Python 标准库,python server.py 即可运行)
+
+运行在主控盒里的树莓派上。树莓派开一个只供盒内使用的 Wi-Fi 热点,安全主控 ESP32 连这个热点,
+每 2 秒 POST /api/device/telemetry,响应里带回触摸屏上排队的命令。不接医院网络。
 
 页面:
-  /  或 /console        手术控制台(手术间外的电脑上看)
-  /panel               主机面板模拟
-  /local?dev=HP-001    主机触摸屏上显示的本机页面(800×480)
-  /cases               历次手术记录列表
-接口见 1-design/interface-spec.md 第 7 节。设备每 2 秒 POST /api/device/telemetry,响应里带回待执行的命令。
+  /  或 /local?dev=HP-001   触摸屏本机界面(800×480),全部操作都在这一页
+  /panel                    主机面板模拟,开发和演示用
+接口见 1-design/interface-spec.md 第 7 节。
 
-样机用途:没有登录、没有加密,只能在隔离的测试网络里用,不能填写真实病人信息。
-环境变量:PORT 端口(默认 8080);HP_DATA_DIR 数据目录(默认本文件所在目录)。
+手术记录是自动的:设备从待机进入预热时开一个 CSV,回到待机时关上,文件在数据目录的 cases/ 下。
+环境变量:PORT 端口(默认 8080);HOST 监听地址(默认 0.0.0.0);HP_DATA_DIR 数据目录(默认本文件所在目录)。
+样机软件,没有登录和加密:只能接在盒内热点上,不要接到任何别的网络。
 """
-import csv, html, io, json, math, os, re, sys, threading, time
+import csv, json, math, os, re, sys, threading, time
 from collections import deque
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -22,6 +24,7 @@ DATA = os.path.join(DATA_DIR, "data.json")
 LOG = os.path.join(DATA_DIR, "audit.jsonl")
 CASES = os.path.join(DATA_DIR, "cases")
 PORT = int(os.environ.get("PORT", "8080"))
+HOST = os.environ.get("HOST", "0.0.0.0")
 
 OFFLINE_S = 5          # 设备多少秒没有上报算离线
 CMD_TTL_S = 30         # 命令排队超过这么久没被取走就作废,免得设备很久以后才执行
@@ -43,7 +46,7 @@ CMD_CN = {"preheat": "开始预热", "ready": "手动确认就绪", "nebulize": 
 PH_CN = {"IDLE": "待机", "PREHEAT": "预热", "READY": "就绪", "NEBULIZE": "喷雾", "EXPOSE": "暴露", "EVAC": "排气", "DONE": "结束"}
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 ALARM_RE = re.compile(r"^[A-Z_]{1,24}$")
-CSV_HEAD = (["time", "epoch", "case", "label", "ph", "phSec", "exposeLeft", "target", "exposeMin", "flowSet", "nebFlow", "circInExpose"]
+CSV_HEAD = (["time", "epoch", "case", "ph", "phSec", "exposeLeft", "target", "exposeMin", "flowSet", "nebFlow", "circInExpose"]
             + list(SENSORS) + ["press", "nozP", "flow"] + ["duty_" + k for k in DUTIES] + ["alarms", "muted"])
 
 lock = threading.RLock()
@@ -85,7 +88,7 @@ def num(v):
 
 
 def text(v, limit):
-    """操作人、手术编号这类人填的文字:去掉控制字符和首尾空白,限制长度。"""
+    """命令来源这类文字:去掉控制字符和首尾空白,限制长度。"""
     if not isinstance(v, str):
         return ""
     return "".join(ch for ch in v if ch.isprintable()).strip()[:limit]
@@ -129,25 +132,44 @@ def online(d, now=None):
 
 def case_view(cid):
     c = S["cases"].get(cid) if cid else None
-    return None if c is None else {k: c.get(k) for k in ("id", "dev", "label", "by", "start", "end", "endBy", "rows")}
+    return None if c is None else {k: c.get(k) for k in ("id", "dev", "start", "end", "rows")}
 
 
 def csv_path(cid):
     return os.path.join(CASES, cid + ".csv")
 
 
-def csv_safe(s):
-    """防止表格软件把以 = + - @ 开头的文字当公式执行。"""
-    return "'" + s if s[:1] in ("=", "+", "-", "@") else s
-
-
 def csv_row(c, L, now):
     t, duty = L["t"], L["duty"]
     f = lambda v: "" if v is None else v
-    return ([time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)), round(now, 2), c["id"], csv_safe(c["label"]),
+    return ([time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)), round(now, 2), c["id"],
              L["ph"], f(L["phSec"]), f(L["exposeLeft"]), f(L["target"]), f(L["exposeMin"]), f(L["flowSet"]), f(L["nebFlow"]), int(L["circInExpose"])]
             + [f(t[k]) for k in SENSORS] + [f(L["press"]), f(L["nozP"]), f(L["flow"])] + [f(duty[k]) for k in DUTIES]
             + ["|".join(L["al"]), int(L["muted"])])
+
+
+def case_open(d, ph, now):
+    """开始一次手术记录。正常是从待机进入预热时;服务程序重启后第一次收到正在运行的设备,也马上接着记。"""
+    did = d["id"]
+    cid = base = "%s-%s" % (did, time.strftime("%Y%m%d-%H%M%S", time.localtime(now)))
+    n = 1
+    while cid in S["cases"]:
+        n += 1
+        cid = "%s-%d" % (base, n)
+    S["cases"][cid] = {"id": cid, "dev": did, "start": now, "end": None, "rows": 0}
+    with open(csv_path(cid), "w", encoding="utf-8-sig", newline="") as f:   # 带 BOM,表格软件才能认出中文
+        csv.writer(f).writerow(CSV_HEAD)
+    d["case"] = cid
+    audit("case_start", dev=did, case=cid, by="自动", reason="进入预热" if ph == "PREHEAT" else "收到运行中的设备(阶段 %s)" % ph)
+    save()
+
+
+def case_close(d, now):
+    c = S["cases"][d["case"]]
+    c["end"] = now
+    d["lastCase"], d["case"] = c["id"], None
+    audit("case_end", dev=d["id"], case=c["id"], by="自动", rows=c["rows"])
+    save()
 
 
 def api_telemetry(b):
@@ -170,11 +192,16 @@ def api_telemetry(b):
               "ipMean": None if ip_mean(t) is None else round(ip_mean(t), 2), "press": L["press"], "nozP": L["nozP"], "flow": L["flow"]})
     while h and now - h[0]["ts"] > HIST_KEEP_S:
         h.popleft()
-    c = S["cases"].get(d["case"]) if d["case"] else None
+    # 自动记录:离开待机就开始,回到待机时写完这一行再关上
+    if not d.get("case") and L["ph"] != "IDLE":
+        case_open(d, L["ph"], now)
+    c = S["cases"].get(d["case"]) if d.get("case") else None
     if c:
         with open(csv_path(c["id"]), "a", encoding="utf-8", newline="") as f:
             csv.writer(f).writerow(csv_row(c, L, now))
         c["rows"] += 1
+        if L["ph"] == "IDLE":
+            case_close(d, now)
     out = []
     for q in CMDS.pop(did, []):
         if now - q["ts"] > CMD_TTL_S:
@@ -215,15 +242,14 @@ def check_value(kind, v):
 
 
 def api_cmd(b):
-    did, kind, by = b.get("dev"), b.get("kind"), text(b.get("by"), 32)
+    # 只有触摸屏会发命令(面板模拟页的按键也走这里),来源只用来记日志,不是身份认证
+    did, kind, by = b.get("dev"), b.get("kind"), text(b.get("by"), 32) or "触摸屏"
     rec = {"dev": did if isinstance(did, str) else None, "kind": kind if isinstance(kind, str) else None, "value": b.get("value"), "by": by}
 
     def reject(code, err):
         audit("cmd", **rec, result="拒绝:" + err)
         return code, {"err": err}
 
-    if not by:
-        return reject(400, "没有填操作人,命令没有发出")
     if kind not in CMD_PHASE:
         return reject(400, "没有这种命令")
     val, err = check_value(kind, b.get("value"))
@@ -233,7 +259,7 @@ def api_cmd(b):
     if d is None:
         return reject(404, "没有这台设备")
     if not online(d):
-        return reject(409, "设备离线,命令送不到。要中止请按主机上的中止键")
+        return reject(409, "主控无响应,命令送不到。要中止请按主机上的红色中止键")
     ph = d["last"].get("ph")
     if CMD_PHASE[kind] is not None and ph not in CMD_PHASE[kind]:
         return reject(409, "现在是“%s”阶段,不能“%s”" % (PH_CN.get(ph, ph), CMD_CN[kind]))
@@ -245,47 +271,6 @@ def api_cmd(b):
     CMDS.setdefault(did, []).append(q)
     audit("cmd", **rec, result="已排队")
     return 200, {"ok": True, "kind": kind, "value": val}
-
-
-def api_case_start(b):
-    did, by, label = b.get("dev"), text(b.get("by"), 32), text(b.get("label"), 40)
-    d = S["devices"].get(did) if isinstance(did, str) else None
-    if d is None:
-        return 404, {"err": "没有这台设备"}
-    if not by:
-        return 400, {"err": "没有填操作人"}
-    if not label:
-        return 400, {"err": "没有填手术编号"}
-    if d["case"]:
-        return 409, {"err": "这台设备已经在记录一次手术,先结束它"}
-    now = time.time()
-    cid = base = "%s-%s" % (did, time.strftime("%Y%m%d-%H%M%S", time.localtime(now)))
-    n = 1
-    while cid in S["cases"]:
-        n += 1
-        cid = "%s-%d" % (base, n)
-    S["cases"][cid] = {"id": cid, "dev": did, "label": label, "by": by, "start": now, "end": None, "endBy": None, "rows": 0}
-    with open(csv_path(cid), "w", encoding="utf-8-sig", newline="") as f:   # 带 BOM,表格软件才能认出中文
-        csv.writer(f).writerow(CSV_HEAD)
-    d["case"] = cid
-    audit("case_start", dev=did, case=cid, label=label, by=by)
-    return 200, {"ok": True, "case": case_view(cid)}
-
-
-def api_case_end(b):
-    did, by = b.get("dev"), text(b.get("by"), 32)
-    d = S["devices"].get(did) if isinstance(did, str) else None
-    if d is None:
-        return 404, {"err": "没有这台设备"}
-    if not by:
-        return 400, {"err": "没有填操作人"}
-    if not d["case"]:
-        return 409, {"err": "这台设备现在没有在记录"}
-    c = S["cases"][d["case"]]
-    c["end"], c["endBy"] = time.time(), by
-    d["lastCase"], d["case"] = c["id"], None
-    audit("case_end", dev=did, case=c["id"], by=by, rows=c["rows"])
-    return 200, {"ok": True, "case": case_view(c["id"])}
 
 
 def api_state():
@@ -328,34 +313,8 @@ def case_log(q):
         return 200, f.read(), "text/csv; charset=utf-8", {"Content-Disposition": 'attachment; filename="%s.csv"' % cid}
 
 
-def cases_page():
-    """服务器直接拼出来的记录列表。所有人填的文字都经过 html.escape。"""
-    e = lambda s: html.escape(str(s), quote=True)
-    tm = lambda x: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(x)) if x else "—"
-    rows = []
-    for c in sorted(S["cases"].values(), key=lambda c: -c["start"])[:300]:
-        rows.append("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class=n>%d</td>"
-                    "<td><a href=\"/api/case/log?dev=%s&amp;case=%s\">下载 CSV</a></td></tr>"
-                    % (e(c["label"]), e(c["dev"]), tm(c["start"]), tm(c["end"]) if c["end"] else "记录中",
-                       e(c["by"]), e(c["endBy"] or "—"), c["rows"], e(c["dev"]), e(c["id"])))
-    body = "".join(rows) or "<tr><td colspan=8 class=dim>还没有手术记录。在控制台填手术编号,点“开始记录”。</td></tr>"
-    return ("""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>手术记录 · hPIPAC 加热系统</title><style>
-:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--rule:#2a444d;--acc:#49b8cc}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Microsoft YaHei","PingFang SC",sans-serif;padding:20px}
-h1{font-size:22px;margin:0 0 4px}a{color:var(--acc)}.dim{color:var(--dim)}
-.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--rule);border-radius:8px;margin-top:14px}
-table{border-collapse:collapse;width:100%%;white-space:nowrap}th,td{padding:8px 14px;text-align:left;border-bottom:1px solid var(--rule)}
-th{color:var(--dim);font-weight:400;font-size:14px}td.n{font-variant-numeric:tabular-nums}tr:last-child td{border-bottom:0}
-</style></head><body><h1>手术记录</h1>
-<div class="dim">每次遥测上报一行,包含全部传感器、阶段、各路输出和报警。<a href="/console">回到控制台</a></div>
-<div class="wrap"><table><tr><th>手术编号</th><th>设备</th><th>开始</th><th>结束</th><th>开始人</th><th>结束人</th><th>行数</th><th></th></tr>%s</table></div>
-<p class="dim">样机软件,没有登录和加密,只能在隔离的测试网络里用。手术编号一栏不要填病人姓名。</p></body></html>""" % body)
-
-
-POST = {"/api/device/telemetry": api_telemetry, "/api/cmd": api_cmd,
-        "/api/case/start": api_case_start, "/api/case/end": api_case_end}
-PAGES = {"/": ("console.html", "text/html"), "/console": ("console.html", "text/html"), "/panel": ("panel.html", "text/html"),
+POST = {"/api/device/telemetry": api_telemetry, "/api/cmd": api_cmd}
+PAGES = {"/": ("local.html", "text/html"), "/panel": ("panel.html", "text/html"),
          "/local": ("local.html", "text/html"), "/common.js": ("common.js", "application/javascript")}
 
 
@@ -394,9 +353,6 @@ class H(BaseHTTPRequestHandler):
             with lock:
                 code, body, ctype, extra = case_log(q)
             return self.send(code, body, ctype or "application/json; charset=utf-8", extra)
-        if p == "/cases":
-            with lock:
-                return self.send(200, cases_page(), "text/html; charset=utf-8")
         self.send(404, {"err": "没有这个地址"})
 
     def do_POST(self):
@@ -430,10 +386,10 @@ def autosave():
 if __name__ == "__main__":
     load()
     threading.Thread(target=autosave, daemon=True).start()
-    print("服务器已启动。控制台: http://<本机IP>:%d/   主机面板模拟: /panel   手术记录: /cases" % PORT, flush=True)
-    print("样机软件,没有登录和加密,只能在隔离的测试网络里用。", flush=True)
+    print("盒内服务程序已启动,监听 %s:%d。触摸屏: /local?dev=设备编号   面板模拟: /panel" % (HOST, PORT), flush=True)
+    print("样机软件,没有登录和加密,只能接在盒内热点上。", flush=True)
     try:
-        ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
+        ThreadingHTTPServer((HOST, PORT), H).serve_forever()
     except KeyboardInterrupt:
         with lock:
             save()

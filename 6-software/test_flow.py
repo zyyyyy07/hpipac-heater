@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""全流程自测:自己在 8091 端口起服务器和模拟器,数据放临时目录,用接口走完一次手术。
+"""全流程自测:自己在 8091 端口起盒内服务程序和主控模拟器,数据放临时目录,用触摸屏会调的接口走完一次手术。
 python test_flow.py     最后一行是 ALL PASS 才算通过;有失败时退出码非 0。
 只检查服务器和模拟器的行为,不检查页面画出来的样子。
 """
@@ -9,8 +9,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("TEST_PORT", "8091"))
 BASE = "http://127.0.0.1:%d" % PORT
 SPEED = "120"                      # 模拟器加速倍数:设备上的 1 分钟 = 这里的 0.5 秒
-BY = "测试员"
-EVIL = "<script>alert(1)</script>"
+TOUCH = "触摸屏"          # 命令不带来源时,日志里记成这个
 fails, count = [], 0
 procs = []
 
@@ -48,7 +47,7 @@ def post(path, body):
         return code, {}
 
 
-def cmd(dev, kind, value=None, by=BY):
+def cmd(dev, kind, value=None, by=None):
     b = {"dev": dev, "kind": kind}
     if value is not None:
         b["value"] = value
@@ -122,10 +121,13 @@ def main(tmp):
         return
 
     # ---- 页面和静态文件 ----
-    for path, word in (("/", "手术控制台"), ("/console", "手术控制台"), ("/panel", "主机面板模拟"), ("/local?dev=HP-001", "腹腔温度"), ("/common.js", "ALARMS"), ("/cases", "手术记录")):
+    for path, word in (("/", "本机界面"), ("/local?dev=HP-001", "本机界面"), ("/panel", "主机面板模拟"), ("/common.js", "ALARMS")):
         code, txt = get(path)
         check("GET %s 返回 200 且内容对" % path, code == 200 and word in txt, code)
+    check("/ 和 /local 是同一个触摸屏页面", get("/")[1] == get("/local")[1])
     check("不存在的地址返回 404", get("/nope")[0] == 404)
+    check("远程页面和手工记录接口都已经去掉(/console、/cases、/api/case/start、/api/case/end)",
+          get("/console")[0] == 404 and get("/cases")[0] == 404 and post("/api/case/start", {"dev": "HP-001"})[0] == 404 and post("/api/case/end", {"dev": "HP-001"})[0] == 404)
     check("开始时没有设备", json.loads(get("/api/state")[1])["devices"] == [])
     check("给不存在的设备发命令 → 404", cmd("HP-999", "preheat")[0] == 404)
     code, j = post("/api/device/telemetry", {"id": "<b>x</b>", "ph": "IDLE"})
@@ -144,9 +146,6 @@ def main(tmp):
     check("雾化气流量默认 12 L/min", L["nebFlow"] == 12.0, L)
 
     # ---- 被拒绝的命令 ----
-    code, j = cmd("HP-001", "preheat", by=None)
-    check("没填操作人 → 400,中文提示", code == 400 and cjk(j.get("err")), (code, j))
-    check("操作人只有空格 → 400", cmd("HP-001", "preheat", by="   ")[0] == 400)
     code, j = cmd("HP-001", "selfdestruct")
     check("不认识的命令 → 400,中文提示", code == 400 and cjk(j.get("err")), (code, j))
     code, j = cmd("HP-001", "target", 43.1)
@@ -172,17 +171,12 @@ def main(tmp):
     check("空请求体 → 400", code == 400, code)
     check("被拒绝后设备仍在待机", last("HP-001")["ph"] == "IDLE")
 
-    # ---- 开始记录(手术编号里故意放一段脚本) ----
-    check("开始记录没填编号 → 400", post("/api/case/start", {"dev": "HP-001", "label": "", "by": BY})[0] == 400)
-    check("开始记录没填操作人 → 400", post("/api/case/start", {"dev": "HP-001", "label": "T-1"})[0] == 400)
-    code, j = post("/api/case/start", {"dev": "HP-001", "label": EVIL, "by": BY})
-    case = (j.get("case") or {}).get("id", "")
-    check("开始记录", code == 200 and case.startswith("HP-001-"), (code, j))
-    check("同一台设备重复开始记录 → 409", post("/api/case/start", {"dev": "HP-001", "label": "T-2", "by": BY})[0] == 409)
-    check("状态里带着当前记录", (dev("HP-001")["case"] or {}).get("id") == case)
+    check("待机时不开记录", dev("HP-001")["case"] is None and dev("HP-001")["lastCase"] is None)
 
     # ---- 设置 ----
-    ok = cmd("HP-001", "target", 41.0)[0] == 200 and cmd("HP-001", "flow", 9)[0] == 200 and cmd("HP-001", "nebFlow", 13)[0] == 200 and cmd("HP-001", "exposeMin", 2)[0] == 200
+    code, j = cmd("HP-001", "target", 41.0)
+    check("命令不需要带来源,也会被接受", code == 200, (code, j))
+    ok = code == 200 and cmd("HP-001", "flow", 9)[0] == 200 and cmd("HP-001", "nebFlow", 13)[0] == 200 and cmd("HP-001", "exposeMin", 2)[0] == 200
     check("改目标温度、循环流量、雾化气流量、暴露时间被接受", ok)
     check("设备执行了新设置", wait("设置", lambda: (lambda x: x["target"] == 41.0 and x["flowSet"] == 9.0 and x["nebFlow"] == 13.0 and x["exposeMin"] == 2)(last("HP-001")), 5), last("HP-001"))
     cmd("HP-001", "circInExpose", True)
@@ -192,6 +186,8 @@ def main(tmp):
 
     # ---- 预热 → 自动就绪 ----
     check("开始预热被接受", cmd("HP-001", "preheat")[0] == 200)
+    check("进入预热后自动开始记录", wait("自动记录", lambda: (dev("HP-001")["case"] or {}).get("id", "").startswith("HP-001-"), 5), dev("HP-001"))
+    case = dev("HP-001")["case"]["id"]
     check("进入预热,四路加热在输出", wait("PREHEAT", lambda: (lambda x: x["ph"] == "PREHEAT" and all(x["duty"][k] > 0 for k in ("syr", "noz", "hum", "tube")))(last("HP-001")), 5), last("HP-001"))
     check("压力到 8 mmHg 以后循环泵才转", wait("泵", lambda: (lambda x: x["duty"]["pump"] > 0 and x["press"] >= 7.5)(last("HP-001")), 10) and not any(float(r["duty_pump"]) > 0 and float(r["press"]) < 7.0 for r in csv.DictReader(io.StringIO(http("GET", "/api/case/log?dev=HP-001")[2].decode("utf-8-sig")))), last("HP-001"))
     check("预热中再点开始预热 → 409", cmd("HP-001", "preheat")[0] == 409)
@@ -221,22 +217,23 @@ def main(tmp):
     check("确认后“暴露计时到”清除", wait("ack", lambda: "EXPOSE_END" not in last("HP-001")["al"], 5))
     cmd("HP-001", "finish")
     check("结束手术 → 结束阶段", wait("DONE", lambda: last("HP-001")["ph"] == "DONE", 5))
+    check("结束阶段记录还开着,行数在涨(触摸屏据此显示“本次记录已保存”)", (lambda d: d["case"] and d["case"]["id"] == case and d["case"]["rows"] > 20)(dev("HP-001")), dev("HP-001")["case"])
     cmd("HP-001", "finish")
     check("再确认 → 回到待机", wait("IDLE", lambda: last("HP-001")["ph"] == "IDLE", 5))
 
-    # ---- 结束记录、CSV ----
-    code, j = post("/api/case/end", {"dev": "HP-001", "by": BY})
-    check("结束记录", code == 200 and j["case"]["end"] and j["case"]["rows"] > 20, (code, j))
-    check("重复结束记录 → 409", post("/api/case/end", {"dev": "HP-001", "by": BY})[0] == 409)
+    # ---- 自动结束记录、CSV ----
+    d1 = dev("HP-001")
+    check("回到待机后记录自动关上", d1["case"] is None and d1["lastCase"]["id"] == case and d1["lastCase"]["end"] and d1["lastCase"]["rows"] > 20, d1)
+    j = {"case": d1["lastCase"]}
     code, hdr, raw = http("GET", "/api/case/log?dev=HP-001&case=" + case)
     rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))))
     check("下载 CSV:200,类型和文件名正确", code == 200 and "text/csv" in hdr.get("Content-Type", "") and case + ".csv" in hdr.get("Content-Disposition", ""), dict(hdr))
-    cols = {"time", "case", "label", "ph", "phSec", "exposeLeft", "target", "flowSet", "nebFlow", "syr1", "syr2", "noz1", "noz2", "humPlate", "humOut", "gasEnd", "ip1", "ip2", "press", "nozP", "flow", "duty_syr", "duty_noz", "duty_hum", "duty_tube", "duty_pump", "alarms", "muted"}
+    cols = {"time", "case", "ph", "phSec", "exposeLeft", "target", "flowSet", "nebFlow", "syr1", "syr2", "noz1", "noz2", "humPlate", "humOut", "gasEnd", "ip1", "ip2", "press", "nozP", "flow", "duty_syr", "duty_noz", "duty_hum", "duty_tube", "duty_pump", "alarms", "muted"}
     check("CSV 每次遥测一行,列齐全", len(rows) == j["case"]["rows"] and cols <= set(rows[0]), (len(rows), sorted(rows[0]) if rows else None))
     seen = [r["ph"] for r in rows]
     order = [p for i, p in enumerate(seen) if i == 0 or seen[i - 1] != p]
-    check("CSV 里的阶段顺序完整", order == ["IDLE", "PREHEAT", "READY", "NEBULIZE", "EXPOSE", "EVAC", "DONE", "IDLE"], order)
-    check("CSV 里记下了报警和数值", any("EXPOSE_END" in r["alarms"] for r in rows) and all(float(r["target"]) == 41.0 for r in rows if r["ph"] != "IDLE") and all(r["case"] == case and r["label"] == EVIL for r in rows))
+    check("CSV 从预热开始,到回待机的那一行结束", order == ["PREHEAT", "READY", "NEBULIZE", "EXPOSE", "EVAC", "DONE", "IDLE"] and seen.count("IDLE") == 1 and seen[-1] == "IDLE", order)
+    check("CSV 里记下了报警和数值", any("EXPOSE_END" in r["alarms"] for r in rows) and all(float(r["target"]) == 41.0 for r in rows) and all(r["case"] == case for r in rows) and "label" not in rows[0])
     neb = [r for r in rows if r["ph"] == "NEBULIZE"]
     check("CSV 里喷雾阶段泵一直在转,旧字段已经没有", len(neb) > 3 and all(float(r["duty_pump"]) > 0 for r in neb) and not any(c.startswith(("li", "duty_li")) for c in rows[0]), len(neb))
     check("喷雾阶段腹腔温度没有回落(循环没有停)", float(neb[-1]["ip1"]) + float(neb[-1]["ip2"]) >= float(neb[0]["ip1"]) + float(neb[0]["ip2"]) - 0.15, (neb[0]["ip1"], neb[-1]["ip1"]))
@@ -245,12 +242,23 @@ def main(tmp):
     check("别的设备取不到这次记录 → 404", get("/api/case/log?dev=HP-002&case=" + case)[0] == 404)
     check("乱写的记录编号 → 404", get("/api/case/log?dev=HP-001&case=../../data")[0] == 404)
 
-    # ---- 转义 ----
-    code, page = get("/cases")
-    check("记录列表页把手术编号转义了", code == 200 and EVIL not in page and "&lt;script&gt;alert(1)&lt;/script&gt;" in page)
-    check("状态接口把编号当作 JSON 字符串原样带回", dev("HP-001")["lastCase"]["label"] == EVIL)
-    pages = "".join(open(os.path.join(HERE, "static", f), encoding="utf-8").read() for f in ("console.html", "local.html", "panel.html"))
-    check("页面脚本没有把人填的文字拼进 innerHTML", len(re.findall(r"innerHTML", pages)) == 1 and "svg.innerHTML = g" in pages)
+    # ---- 服务程序重启后第一次收到正在运行的设备:马上接着记 ----
+    post("/api/device/telemetry", {"id": "HP-009", "ph": "EXPOSE", "target": 42.0, "exposeLeft": 900})
+    d9 = dev("HP-009")
+    check("第一次收到就在运行的设备,也自动开记录", d9["case"] is not None and d9["case"]["rows"] == 1, d9)
+    post("/api/device/telemetry", {"id": "HP-009", "ph": "IDLE"})
+    d9 = dev("HP-009")
+    check("它回到待机时记录关上,共 2 行", d9["case"] is None and d9["lastCase"]["rows"] == 2, d9)
+
+    # ---- 页面 ----
+    local = open(os.path.join(HERE, "static", "local.html"), encoding="utf-8").read()
+    pages = local + open(os.path.join(HERE, "static", "panel.html"), encoding="utf-8").read()
+    check("页面脚本只在画曲线时用 innerHTML", len(re.findall(r"innerHTML", pages)) == 1 and "svg.innerHTML = g" in pages)
+    check("触摸屏页面有全部操作:阶段按钮、中止再确认、确认报警、消音、五项设置、曲线页",
+          all(w in local for w in ('id="bMain"', 'id="bAbort"', "确认中止", 'id="bAck"', 'id="bMute"', 'data-tab="pChart"', 'data-tab="pSet"'))
+          and all('data-k="%s"' % k in local for k in ("target", "flow", "nebFlow", "exposeMin", "circInExpose")))
+    check("触摸屏页面有“主控无响应”整屏状态和“本次记录已保存”", "主控无响应" in local and "本次记录已保存" in local)
+    check("页面不再指向已经去掉的页面", "/console" not in pages and "/cases" not in pages)
 
     # ---- 曲线数据 ----
     code, raw = get("/api/history?dev=HP-001&sec=7200")
@@ -270,11 +278,15 @@ def main(tmp):
     check("手动确认时腹腔温度其实还没到", L["ph"] == "READY" and (L["t"]["ip1"] + L["t"]["ip2"]) / 2 < L["target"] - 1.0, L)
     time.sleep(1.5)   # 设备时间 3 分钟
     check("手动确认后不会因为腹腔温度掉回预热", last("HP-002")["ph"] == "READY")
+    case2 = (dev("HP-002")["case"] or {}).get("id")
     check("中止被接受", cmd("HP-002", "abort")[0] == 200)
     check("中止后进入排气,加热和泵全关", wait("abort", lambda: (lambda x: x["ph"] == "EVAC" and not any(x["duty"].values()))(last("HP-002")), 5), last("HP-002"))
     cmd("HP-002", "finish"); wait("DONE", lambda: last("HP-002")["ph"] == "DONE", 5)
     cmd("HP-002", "finish"); wait("IDLE", lambda: last("HP-002")["ph"] == "IDLE", 5)
+    check("中止后走完结束,第一台的第一次记录关上", (dev("HP-002")["lastCase"] or {}).get("id") == case2 and dev("HP-002")["case"] is None, dev("HP-002"))
     cmd("HP-002", "preheat"); wait("PREHEAT", lambda: last("HP-002")["ph"] == "PREHEAT", 5)
+    case3 = (dev("HP-002")["case"] or {}).get("id")
+    check("再次预热开了一份新的记录", case3 and case3 != case2, (case2, case3))
     go_ready("HP-002")
     cmd("HP-002", "nebulize"); wait("NEBULIZE", lambda: last("HP-002")["ph"] == "NEBULIZE", 5)
     cmd("HP-002", "expose"); wait("EXPOSE", lambda: last("HP-002")["ph"] == "EXPOSE", 5)
@@ -319,18 +331,17 @@ def main(tmp):
               "console.log(JSON.stringify([c.nebStopped(L),c.nebStopped(ok),c.nebStopped({ph:'NEBULIZE',duty:{pump:80},al:['PRESS_HIGH']}),"
               "c.nebStopped({ph:'NEBULIZE',duty:{pump:0},al:[]}),c.nebStopped({ph:'NEBULIZE',duty:{pump:80},al:['NOZ_LOW','WATER_LOW']}),"
               "c.nebStopped({ph:'EXPOSE',duty:{pump:0},al:['NOZ_BLOCK']}),c.nebStopped({ph:'READY',duty:{pump:0},al:['IP_HIGH']}),"
-              "c.PUMP_STOP_ALARMS.slice().sort().join(),c.nebStopWhy(L)]))")
+              "c.PUMP_STOP_ALARMS.slice().sort().join(),c.nebStopWhy(L),c.ledState(L,200).red,c.ledState(L,200).buzz]))")
         out = subprocess.run([node, "-e", js, os.path.join(HERE, "static", "common.js"), json.dumps(L4)], capture_output=True, text=True, encoding="utf-8")
         try:
             got = json.loads(out.stdout)
         except ValueError:
             got = out.stderr
         check("common.js 的 nebStopped():真实遥测判为要停注射泵,其余情形判断正确",
-              got[:7] == [True, False, True, True, False, False, False] and got[7] == "IP_HIGH,NOZ_BLOCK,OVERTEMP_GAS,PRESS_HIGH,PRESS_LOW,SENSOR" and "喷头堵塞" in got[8], got)
+              got[:7] == [True, False, True, True, False, False, False] and got[7] == "IP_HIGH,NOZ_BLOCK,OVERTEMP_GAS,PRESS_HIGH,PRESS_LOW,SENSOR" and "喷头堵塞" in got[8] and got[9] is True, got)
     else:
         print("SKIP  没有找到 node,跳过 common.js 里 nebStopped() 的检查", flush=True)
-    pages2 = {f: open(os.path.join(HERE, "static", f), encoding="utf-8").read() for f in ("console.html", "local.html")}
-    check("控制台和本机页面都有“立即停止注射泵”,并且用的是 nebStopped()", all("立即停止注射泵" in v and "雾化气已停,药液会不成雾直接滴入" in v and "nebStopped(L)" in v for v in pages2.values()))
+    check("触摸屏页面有“立即停止注射泵”,并且用的是 nebStopped()", "立即停止注射泵" in local and "雾化气已停,药液会不成雾直接滴入" in local and "nebStopped(L)" in local)
 
     # ---- 故障注入:雾化气压不足 ----
     sim5 = spawn(["simulator.py", BASE, "1", SPEED, "--first", "5", "--fault", "noz_low@0"], env, os.path.join(tmp, "sim5.log"))
@@ -347,10 +358,10 @@ def main(tmp):
     with open(os.path.join(tmp, "audit.jsonl"), encoding="utf-8") as f:
         log = [json.loads(x) for x in f]
     cmds = [r for r in log if r["event"] == "cmd"]
-    check("操作日志每条命令都有操作人、时间、结果", len(cmds) > 30 and all(r.get("t") and "by" in r and r.get("result") for r in cmds), len(cmds))
-    check("日志里有中止的排队和送达", any(r["kind"] == "abort" and r["by"] == BY and r["result"] == "已排队" for r in cmds) and any(r["kind"] == "abort" and r["result"] == "已送达设备" for r in cmds))
+    check("操作日志每条命令都有来源、时间、结果", len(cmds) > 30 and all(r.get("t") and r.get("by") and r.get("result") for r in cmds), len(cmds))
+    check("不带来源的命令记成“触摸屏”;日志里有中止的排队和送达", any(r["kind"] == "abort" and r["by"] == TOUCH and r["result"] == "已排队" for r in cmds) and any(r["kind"] == "abort" and r["result"] == "已送达设备" for r in cmds))
     check("被拒绝的命令也记了日志", any(r["result"].startswith("拒绝") and r.get("kind") == "selfdestruct" for r in cmds))
-    check("日志里有开始和结束记录", any(r["event"] == "case_start" and r["case"] == case for r in log) and any(r["event"] == "case_end" and r["case"] == case for r in log))
+    check("日志里有自动开始和结束记录", any(r["event"] == "case_start" and r["case"] == case and r["by"] == "自动" for r in log) and any(r["event"] == "case_end" and r["case"] == case for r in log))
 
     # ---- 离线 ----
     stop(sim); stop(sim3); stop(sim4); stop(sim5)
@@ -366,6 +377,7 @@ def main(tmp):
     d = dev("HP-001")
     check("重启后设备和上一次记录还在", d is not None and not d["online"] and (d.get("lastCase") or {}).get("id") == case, d)
     check("重启后还能下载 CSV", http("GET", "/api/case/log?dev=HP-001&case=" + case)[0] == 200)
+    check("重启后没结束的记录还挂在设备上,会接着写", (dev("HP-002")["case"] or {}).get("id") == case3, dev("HP-002")["case"])
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
 // ---- 网络 ----
 #define WIFI_SSID     "your-wifi"
 #define WIFI_PASS     "your-password"
-#define SERVER_URL    "http://192.168.1.100:8080"   // 运行服务器程序的电脑
+#define SERVER_URL    "http://10.42.0.1:8080"       // 盒内树莓派的服务程序(树莓派自己开的热点)
 #define DEVICE_ID     "HP-001"                      // 每台设备不同
 
 // ---- 引脚(ESP32-DevKitC,WROOM-32 模组)----

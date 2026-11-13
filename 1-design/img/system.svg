@@ -43,7 +43,6 @@
         <text class="svgt" x="108" y="172" text-anchor="middle">主机 + 触摸屏</text>
         <text class="svgs" x="108" y="190" text-anchor="middle">四路加热、保护、计时</text>
         <path class="ctrl" d="M108 150 V74 M192 170 H282 M192 186 H470"/>
-        <text class="svgs" x="108" y="228" text-anchor="middle">手术室外有遥控控制台</text>
         <!-- 图例 -->
         <g transform="translate(24,346)"><line x1="0" y1="0" x2="22" y2="0" stroke="#7a3fa8" stroke-width="3.2"/><text class="svgs" x="28" y="4">药液</text>
         <line x1="70" y1="0" x2="92" y2="0" stroke="#0f8a8f" stroke-width="3.2"/><text class="svgs" x="98" y="4">温热 CO₂</text>

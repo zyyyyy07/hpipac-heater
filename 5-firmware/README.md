@@ -24,7 +24,7 @@ pio device monitor
 | 项目 | 说明 |
 | --- | --- |
 | `WIFI_SSID`、`WIFI_PASS` | Wi-Fi 名称和密码 |
-| `SERVER_URL` | 运行服务器程序的电脑地址,例如 `http://192.168.1.100:8080` |
+| `SERVER_URL` | 盒内树莓派的服务程序地址,默认 `http://10.42.0.1:8080`。`WIFI_SSID`、`WIFI_PASS` 填树莓派热点的名称和密码 |
 | `DEVICE_ID` | 设备编号,默认 `HP-001`,每台不同 |
 | `HAS_PRESSURE`、`HAS_NOZ_PRESSURE`、`HAS_IP_PROBES` | 没装腹腔压力传感器、雾化气压传感器、腹腔温度探头时设为 0 |
 | `OFFSET_*` | 每只温度传感器和两只压力传感器的校准偏差,校准后填入 |
@@ -43,7 +43,7 @@ pio device monitor
 | `log 1` / `log 0` | 每秒输出一行 CSV / 停止 |
 | `heat <syr\|noz\|hum\|tube> <占空比%>` | 手动给一路加热,只在 IDLE 可用。过温保护照常起作用;`0` 关闭;10 分钟后自动关 |
 | `pump <占空比%>` | 手动转循环泵,只在 IDLE 可用;`0` 关闭 |
-| `preheat`、`ready`、`nebulize`、`expose`、`evac`、`finish`、`abort` | 与服务器下发的同名命令相同 |
+| `preheat`、`ready`、`nebulize`、`expose`、`evac`、`finish`、`abort` | 与触摸屏上的同名操作相同 |
 | `target <37.0–43.0>`、`flow <0–15>`、`nebflow <5–15>`、`exposeMin <1–60>`、`circInExpose <1\|0>` | 改设定值,超范围会被拒绝 |
 | `ack`、`mute` | 确认可恢复的报警、消音 2 分钟 |
 

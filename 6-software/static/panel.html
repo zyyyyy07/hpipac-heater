@@ -26,7 +26,7 @@ td:first-child{white-space:nowrap;color:#bfe6f2}.dim{color:var(--dim);font-size:
 #msg{color:var(--warn);min-height:1.6em;font-weight:700}
 </style></head><body>
 <header><h1>主机面板模拟</h1><select id="dev" aria-label="设备"></select><span id="sub" class="dim"></span><span class="sp"></span>
-<a id="con" href="/console">手术控制台</a></header>
+<a id="loc" href="/local">全屏打开本机界面</a></header>
 <div class="wrap">
   <div>
     <div class="cover" aria-label="主机盖板">
@@ -38,20 +38,20 @@ td:first-child{white-space:nowrap;color:#bfe6f2}.dim{color:var(--dim);font-size:
       <button class="btn mute" id="bMute" style="left:63.7%;top:90.3%">消音</button>
       <span class="buz" id="buz" style="left:80.2%;top:90.3%" title="蜂鸣器"></span>
     </div>
-    <p class="dim">盖板按 205 × 145 mm、屏幕窗口 155 × 87 mm 的比例画。屏幕是 7 英寸触摸屏(800 × 480),里面就是真正的本机页面,可以直接点。下排从左到右:红、黄、绿指示灯,中止键,消音键,蜂鸣器。</p>
-    <p class="dim">注意:这一页上的中止键和消音键会把命令真的发给所选的设备。实物的中止键按下就生效,所以这里也不再问一次。</p>
+    <p class="dim">盖板按 205 × 145 mm、屏幕窗口 155 × 87 mm 的比例画。屏幕是 7 英寸触摸屏(800 × 480),里面就是真正的本机界面(全部操作都在这块屏上),可以直接点。下排从左到右:红、黄、绿指示灯,中止键,消音键,蜂鸣器。</p>
+    <p class="dim">注意:这一页上的中止键和消音键会把命令真的发给所选的设备。实物的中止键直接接在安全主控上、按下就生效,这里为了演示改成经服务程序转发,也不再问一次。</p>
     <div id="msg" role="status"></div>
   </div>
   <div style="display:grid;gap:14px">
     <div class="card"><h2>当前状态</h2><table id="exp"></table></div>
     <div class="card"><h2>指示灯和蜂鸣器</h2><table>
-      <tr><td>红灯快闪</td><td>有高级报警:过温、腹腔温度过高、传感器故障、腹腔压力过高或过低、喷头堵塞。相关的加热和循环泵已经自动关掉。</td></tr>
+      <tr><td>红灯快闪</td><td>有高级报警:过温、腹腔温度过高、传感器故障、腹腔压力过高或过低、喷头堵塞。相关的加热和循环泵已经自动关掉。喷雾中雾化气停了(要立即停注射泵)也是红灯快闪。</td></tr>
       <tr><td>黄灯常亮</td><td>有中级报警:加湿罐缺水、雾化气压不足、预热太久、腹腔温度偏低、暴露计时到。</td></tr>
       <tr><td>绿灯慢闪</td><td>预热中。</td></tr>
       <tr><td>绿灯常亮</td><td>就绪、喷雾、暴露阶段。</td></tr>
       <tr><td>蜂鸣器</td><td>高级报警急促响,中级报警每 2 秒短响一声,消音后 2 分钟不响。这里只用光圈示意,不出声。</td></tr></table></div>
-    <div class="card"><h2>屏幕和按键各管什么</h2><p class="dim" style="margin:0">触摸屏显示的是服务器上的本机页面,断网时会停在最后的画面。指示灯、蜂鸣器、中止键直接接在安全主控上,不依赖网络和触摸屏,屏幕黑了也照常报警和关断。</p></div>
-    <p class="dim">指示灯和蜂鸣器是按上面的规则,用服务器收到的数据重画出来的,不是固件本身在运行。</p>
+    <div class="card"><h2>屏幕和按键各管什么</h2><p class="dim" style="margin:0">触摸屏显示的是盒内树莓派上服务程序提供的本机界面。安全主控 5 秒没有数据过来,屏幕整屏显示“主控无响应”,不能再操作。指示灯、蜂鸣器、中止键直接接在安全主控上,不依赖树莓派和触摸屏,屏幕黑了也照常报警和关断。</p></div>
+    <p class="dim">指示灯和蜂鸣器是按上面的规则,用服务程序收到的数据重画出来的,不是固件本身在运行。</p>
   </div>
 </div>
 <script src="/common.js"></script>
@@ -92,13 +92,13 @@ async function tick() {
       sel.value = cur;
     }
     dev = ds.find(d => d.id === cur) || null;
-    if (!dev) { $('#sub').textContent = '还没有设备连上服务器。请先运行 simulator.py 或给主机上电。'; return; }
+    if (!dev) { $('#sub').textContent = '还没有主控连上服务程序。请先运行 simulator.py 或给主机上电。'; return; }
     explain(dev);
     const u = '/local?dev=' + encodeURIComponent(dev.id), fr = $('#fr');
-    $('#con').href = '/console?dev=' + encodeURIComponent(dev.id);
+    $('#loc').href = u;
     if (fr.dataset.u !== u) { fr.dataset.u = u; fr.src = u; fitScr(); }
     $('#sub').textContent = dev.online ? '' : '设备离线,显示的是最后一次上报的内容,指示灯画成全灭';
-  } catch (e) { $('#sub').textContent = '服务器没有响应。请确认 server.py 还在运行。'; }
+  } catch (e) { $('#sub').textContent = '服务程序没有响应。请确认 server.py 还在运行。'; }
 }
 async function cmd(kind, what) {
   if (!dev) return;
