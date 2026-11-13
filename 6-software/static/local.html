@@ -2,178 +2,222 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=800,initial-scale=1">
 <title>本机界面 · hPIPAC 加热系统</title>
 <style>
-/* 主机 7 英寸触摸屏的本机界面,固定 800×480,不滚动。这是唯一的操作界面。
-   所有能点的东西至少 48 px 高,戴手套也能点。 */
-:root{--ff:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--rule:#2a444d;
-  --ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#a876d9}
+/* 主机 7 英寸触摸屏的本机界面,固定 800×480。这是唯一的操作界面。
+   规则见 1-design/touchscreen-ui.md:主屏只回答“在哪一步、一切正常吗、下一步按什么”,其余放进“详情”。
+   最小字号 20 px;能按的东西至少 64 px 高;颜色只表示状态;任何内容不裁切、不滚动。 */
+:root{--ff:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;--mono:"Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;
+  --bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#9fb4ba;--rule:#2a444d;
+  --ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--off:#7d9096;--acc:#49b8cc;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#a876d9}
 *{box-sizing:border-box}
 html,body{margin:0;width:800px;height:480px;overflow:hidden}
-body{background:var(--bg);color:var(--fg);font:18px/1.3 var(--ff);font-variant-numeric:tabular-nums;position:relative;
-  display:grid;grid-template-rows:64px 40px 1fr 84px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
-.dim{color:var(--dim)}
+body{background:var(--bg);color:var(--fg);font:22px/1.3 var(--ff);position:relative;
+  display:grid;grid-template-rows:72px 360px 48px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 [hidden]{display:none!important}
-button{font:inherit;font-weight:700;border-radius:8px;border:2px solid var(--acc);background:transparent;color:var(--acc);font-size:20px;padding:0 14px;min-height:48px;min-width:64px;cursor:pointer}
+button{font:700 24px/1.15 var(--ff);border-radius:10px;border:2px solid var(--acc);background:transparent;color:var(--acc);padding:0 12px;min-height:64px;cursor:pointer}
 button:disabled{opacity:.35;cursor:default}
 button:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
 
-/* 顶栏:阶段、计时、三个页签 */
-.top{display:flex;align-items:center;gap:12px;padding:0 8px 0 14px;background:var(--card)}
-#phName{font-size:34px;font-weight:700;min-width:72px}
-#tLabel{font-size:16px;color:var(--dim)}
-#timer{font-size:34px;font-weight:700}
-#timer.cd{color:var(--fg);font-size:38px}
+/* ---------- 顶栏 ---------- */
+.top{display:flex;align-items:center;gap:14px;padding:0 4px 0 16px;background:var(--card)}
+#phName{font:700 38px/1 var(--ff)}
+#stepNo{font-size:20px;color:var(--dim)}
 .sp{flex:1}
-.tabs{display:flex;gap:6px}
-.tabs button{width:92px;height:52px;border-color:var(--rule);color:var(--dim);font-size:20px}
-.tabs button[aria-selected="true"]{background:var(--acc);border-color:var(--acc);color:#04222a}
+#tLabel{font-size:20px;color:var(--dim)}
+#timer{font-size:36px;font-weight:700}
+#bDet{width:116px;border-color:var(--rule);color:var(--fg)}
+#bDet.on{border-color:var(--acc);color:var(--acc)}
+#bAbort{width:116px;border-color:var(--crit);color:var(--crit);font-size:28px}
 
-/* 提示条:报警优先 */
-#strip{display:flex;align-items:center;padding:0 14px;font-size:18px;color:var(--dim);white-space:nowrap;overflow:hidden}
-#strip.high{background:var(--crit);color:#fff;font-weight:700}#strip.mid{background:var(--warn);color:#201500;font-weight:700}
-#strip.saved{color:var(--ok);font-weight:700}
+/* ---------- 主屏 ---------- */
+#main{display:grid;grid-template-columns:430px 370px;min-height:0}
+.left{padding:8px 14px 8px 18px;display:flex;flex-direction:column;border-right:1px solid var(--rule)}
+.lbl{font-size:20px;color:var(--dim)}
+.ipRow{display:flex;align-items:center;gap:14px;height:96px}
+#ipMean{font:700 92px/1 var(--mono);letter-spacing:-2px}
+#ipMean.hi{color:var(--crit)}
+.unit{font-size:28px;color:var(--dim);align-self:flex-start;margin-top:14px;margin-left:-8px}
+#ipTag{font-size:22px;font-weight:700;padding:2px 12px;border-radius:16px;border:2px solid currentColor}
+#ipTag.heat{color:var(--off)}#ipTag.ok{color:var(--ok)}#ipTag.hi{color:#fff;background:var(--crit);border-color:var(--crit)}
+#ipTg{font-size:22px;color:var(--dim);margin-bottom:6px}
+.chk{list-style:none;margin:0;padding:6px 0 0;border-top:1px solid var(--rule);display:grid;grid-template-rows:repeat(4,44px)}
+.chk li{display:grid;grid-template-columns:34px 112px 1fr;align-items:center;white-space:nowrap}
+.chk .m{font-weight:700;font-size:24px}
+.chk .v{font-family:var(--mono)}
+.chk li.ok .m{color:var(--ok)}
+.chk li.off{color:var(--off)}
+.chk li.warn{color:var(--warn)}
+.chk li.bad{color:var(--crit)}
 
-.pane{padding:8px 10px;min-height:0}
+.right{padding:12px 16px 14px;display:flex;flex-direction:column;min-height:0}
+#next{font:26px/1.35 var(--ff);margin-top:4px}
+#nextSub{font-size:20px;color:var(--dim);margin-top:10px;overflow-wrap:anywhere;white-space:pre-wrap}
+#bMain{margin-top:auto;min-height:104px;background:var(--acc);border-color:var(--acc);color:#04222a;font-size:32px}
 
-/* 运行页 */
-#pRun{display:grid;grid-template-columns:1fr 250px;gap:10px}
-.ch{display:grid;grid-template-rows:repeat(5,1fr);gap:4px}
-.r{display:grid;grid-template-columns:128px 112px 96px 1fr;align-items:center;gap:8px;background:var(--card);border-radius:6px;padding:0 10px}
-.r .n{font-size:17px}.r b{font-size:30px;text-align:right}.r b small{font-size:14px;color:var(--dim);font-weight:400;margin-left:3px}
-.r .sv{font-size:15px;color:var(--dim)}
-.bar{height:14px;background:#0b1418;border-radius:7px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--acc);width:0}
-.bw{display:grid;grid-template-columns:1fr 44px;gap:6px;align-items:center;font-size:15px;color:var(--dim)}
-.bw span{text-align:right}
-.ip{background:var(--card);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column}
-.ip h2{margin:0;font-size:16px;font-weight:400;color:var(--dim)}
-#ipMean{font:700 72px/1.05 var(--ff);font-variant-numeric:tabular-nums}
-#ipMean.hi{color:var(--crit)}#ipMean.lo{color:var(--warn)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:15px;color:var(--dim);margin-top:auto}
-.two b{display:block;font-size:24px;color:var(--fg)}
+/* 报警卡:整个右半边 */
+.right.alarm{padding:12px 16px 12px}
+.right.alarm.high{background:var(--crit);color:#fff}
+.right.alarm.mid{background:var(--warn);color:#1c1300}
+#aTitle{font:700 30px/1.2 var(--ff)}
+#aDid{font-size:22px;margin-top:4px}
+#aSteps{margin:8px 0 0;padding-left:30px;font:22px/1.35 var(--ff)}
+#aSteps li.stop{font:700 34px/1.3 var(--ff);background:#fff;color:var(--crit);border-radius:6px;padding:2px 10px;list-style-position:inside;margin:4px 0 6px -30px}
+.abtn{margin-top:auto;display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.abtn button{min-height:72px;border-color:currentColor;color:inherit;background:rgba(0,0,0,.18)}
+.abtn button.big{background:#fff;border-color:#fff;color:#1c1300;font-size:26px}
+.right.alarm.high .abtn button.big{color:var(--crit)}
+#aMore{font-size:20px;margin-top:6px;text-align:center}
 
-/* 曲线页 */
-#pChart{padding:4px 10px}
-#chart{display:block;width:780px;height:284px}
-#chart text{fill:var(--dim);font-size:14px;font-variant-numeric:tabular-nums}
-#chart text.e{fill:var(--fg);font-size:15px}
+/* ---------- 状态栏 ---------- */
+.bar{display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--card);white-space:nowrap;overflow:hidden}
+#sText{font-size:22px;font-weight:700}
+#sText.ok{color:var(--ok)}#sText.off{color:var(--dim);font-weight:400}#sText.warn{color:var(--warn)}#sText.bad{color:var(--crit)}
+#devId{font-size:20px;color:var(--dim)}
 
-/* 设置页:每行  名称 | − 数值 + | 应用 */
-#pSet{display:grid;grid-template-rows:repeat(5,1fr);gap:4px}
-.s{display:grid;grid-template-columns:1fr 64px 120px 64px 112px;gap:8px;align-items:center;background:var(--card);border-radius:6px;padding:0 10px 0 14px}
-.s .n{font-size:19px}.s .n small{display:block;font-size:14px;color:var(--dim)}
-.s .v{text-align:center;font-size:30px;font-weight:700}
-.s .v small{font-size:14px;color:var(--dim);font-weight:400;margin-left:3px}
+/* ---------- 详情 ---------- */
+#det{display:grid;grid-template-columns:160px 1fr;min-height:0}
+.nav{display:flex;flex-direction:column;gap:10px;padding:8px 0 8px 10px}
+.nav button{border-color:var(--rule);color:var(--dim)}
+.nav button[aria-selected="true"]{border-color:var(--acc);color:var(--acc)}
+#bEarly{margin-top:auto;border-color:var(--crit);color:var(--crit);font-size:22px;padding:0 4px;white-space:nowrap}
+.dp{padding:8px 10px;min-height:0}
+#tVal{width:100%;border-collapse:collapse;font-size:20px}
+#tVal th{font-weight:400;color:var(--dim);text-align:right;padding:0 8px;height:32px}
+#tVal td{height:33px;padding:0 8px;text-align:right;font-family:var(--mono);border-top:1px solid var(--rule);white-space:nowrap}
+#tVal th:first-child,#tVal td:first-child{text-align:left;font-family:var(--ff)}
+#chart{display:block;width:620px;height:344px}
+#chart text{fill:var(--dim);font-size:20px;font-family:var(--mono)}
+#chart text.e{fill:var(--fg)}
+#chart text.l{font-family:var(--ff)}
+#pSet{display:grid;grid-template-rows:repeat(5,64px);gap:6px}
+.s{display:grid;grid-template-columns:1fr 64px 112px 64px 108px;gap:8px;align-items:center}
+.s .n{font:22px/1.15 var(--ff)}.s .n small{display:block;font-size:20px;color:var(--dim)}
+.s .v{text-align:center;font:700 30px/1 var(--mono)}
+.s .v small{font:20px var(--ff);color:var(--dim);margin-left:2px}
 .s .v.p{color:var(--warn)}
-.s button.pm{font:700 30px/1 var(--ff);padding:0}
-.s button.ap{background:var(--acc);color:#04222a}
+.s button.pm{font:700 34px/1 var(--ff);padding:0}
+.s button.ap{background:var(--acc);color:#04222a;font-size:22px;padding:0 4px}
 .seg{grid-column:2/5;display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .seg button{border-color:var(--rule);color:var(--dim)}
-.seg button.on{border-color:var(--fg);color:var(--fg);background:#1f4650}
+.seg button.on{border-color:var(--fg);color:var(--fg)}
 .seg button.on.p{border-color:var(--warn);color:var(--warn)}
 
-/* 底栏:阶段操作、确认报警、消音、中止。三个页签下都在 */
-.bot{display:grid;grid-template-columns:1fr auto auto 150px;gap:10px;padding:0 10px 10px}
-#bMain{background:var(--acc);color:#04222a;font-size:28px}
-#bAbort{border-color:var(--crit);color:var(--crit);font-size:28px}
-
-/* 再确认一次 */
-#sheet{position:absolute;inset:0;background:rgba(5,12,15,.82);z-index:8;display:flex;align-items:center;justify-content:center}
-#sheet .box{width:640px;background:var(--card);border:3px solid var(--crit);border-radius:10px;padding:22px 24px;display:grid;gap:16px}
-#sheet .t{font-size:30px;font-weight:700}
-#sheet .d{font-size:19px;color:var(--dim)}
-#sheet .b{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-#sheet button{min-height:72px;font-size:26px}
+/* ---------- 再确认一次:全屏,确认在左、取消在右 ---------- */
+#sheet{position:absolute;inset:0;background:var(--bg);z-index:8;display:flex;flex-direction:column;justify-content:center;gap:22px;padding:0 44px;border:6px solid var(--crit)}
+#sT{font-size:40px;font-weight:700}
+#sD{font-size:24px;color:var(--dim)}
+.sb{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:10px}
+.sb button{min-height:110px;font-size:32px}
 #sYes{background:var(--crit);border-color:var(--crit);color:#fff}
 #sNo{border-color:var(--dim);color:var(--fg)}
+#sAuto{font-size:20px;color:var(--dim)}
 
-/* 喷雾阶段雾化气停了:盖住顶栏和提示条,是整屏最大的字 */
-#stopNow{position:absolute;left:0;top:0;width:800px;height:104px;background:var(--crit);color:#fff;padding:4px 14px;z-index:6;font-size:19px;font-weight:700;white-space:nowrap;overflow:hidden}
-#stopNow .big{font:700 64px/1.1 var(--ff);letter-spacing:2px}
-
-/* 主控无响应 / 服务程序无响应 / 等待主控连接:整屏 */
+/* ---------- 主控无响应 / 服务程序无响应 / 等待主控连接:整屏 ---------- */
 #dead{position:absolute;inset:0;z-index:10;background:#1a0d0c;border:8px solid var(--crit);padding:34px 40px;display:flex;flex-direction:column;gap:14px}
 #dead.wait{background:var(--bg);border-color:var(--rule)}
 #dead .big{font:700 72px/1.1 var(--ff);color:var(--crit)}
 #dead.wait .big{color:var(--fg);font-size:48px}
-#dead p{margin:0;font-size:22px}
-#dead .neb{font-size:28px;font-weight:700;color:#fff;background:var(--crit);border-radius:6px;padding:6px 12px}
+#dead p{margin:0;font-size:24px}
+#dead .neb{font-size:30px;font-weight:700;color:#fff;background:var(--crit);border-radius:6px;padding:6px 12px}
 </style></head><body>
 
 <div class="top">
-  <span id="phName">—</span><span id="tLabel"></span><span id="timer"></span>
+  <span id="phName">—</span><span id="stepNo"></span>
   <span class="sp"></span>
-  <div class="tabs" role="tablist">
-    <button role="tab" data-tab="pRun" aria-selected="true">运行</button>
-    <button role="tab" data-tab="pChart" aria-selected="false">曲线</button>
-    <button role="tab" data-tab="pSet" aria-selected="false">设置</button>
-  </div>
-</div>
-<div id="strip" role="status"></div>
-
-<div id="pRun" class="pane">
-  <div class="ch">
-    <div class="r"><span class="n">注射筒</span><b><span id="vSyr">--</span><small>℃</small></b><span class="sv" id="sSyr"></span><div class="bw"><div class="bar"><i id="dSyr"></i></div><span id="pSyr"></span></div></div>
-    <div class="r"><span class="n">喷头歧管</span><b><span id="vNoz">--</span><small>℃</small></b><span class="sv" id="sNoz"></span><div class="bw"><div class="bar"><i id="dNoz"></i></div><span id="pNoz"></span></div></div>
-    <div class="r"><span class="n">加湿罐出口</span><b><span id="vHum">--</span><small>℃</small></b><span class="sv" id="sHum"></span><div class="bw"><div class="bar"><i id="dHum"></i></div><span id="pHum"></span></div></div>
-    <div class="r"><span class="n">输气管喷头端</span><b><span id="vTube">--</span><small>℃</small></b><span class="sv" id="sTube"></span><div class="bw"><div class="bar"><i id="dTube"></i></div><span id="pTube"></span></div></div>
-    <div class="r"><span class="n">循环泵</span><b><span id="vPump">--</span><small>L/min</small></b><span class="sv" id="sPump"></span><div class="bw"><div class="bar"><i id="dPump"></i></div><span id="pPump"></span></div></div>
-  </div>
-  <div class="ip">
-    <h2>腹腔温度(平均)</h2>
-    <div><span id="ipMean">--</span><span class="dim"> ℃</span></div>
-    <div id="ipTg" class="dim" style="font-size:16px"></div>
-    <div class="two">
-      <div>探头 1<b id="ip1">--</b></div><div>探头 2<b id="ip2">--</b></div>
-      <div>腹压 mmHg<b id="press">--</b></div><div>雾化气压 kPa<b id="nozP">--</b></div>
-    </div>
-  </div>
-</div>
-
-<div id="pChart" class="pane" hidden>
-  <svg id="chart" viewBox="0 0 780 284" role="img" aria-label="最近 30 分钟的腹腔平均温度、输气管喷头端气温、喷头歧管温度、注射筒温度和目标温度曲线"></svg>
-</div>
-
-<div id="pSet" class="pane" hidden>
-  <div class="s" data-k="target"><span class="n">目标温度<small>37.0–43.0 ℃,按住 − + 连续调</small></span>
-    <button class="pm" data-d="-1" aria-label="目标温度减 0.1">−</button><span class="v"><span></span><small>℃</small></span><button class="pm" data-d="1" aria-label="目标温度加 0.1">+</button><button class="ap">应用</button></div>
-  <div class="s" data-k="flow"><span class="n">循环流量<small>0–15 L/min,预热、就绪、暴露阶段用</small></span>
-    <button class="pm" data-d="-1" aria-label="循环流量减 0.5">−</button><span class="v"><span></span><small>L/min</small></span><button class="pm" data-d="1" aria-label="循环流量加 0.5">+</button><button class="ap">应用</button></div>
-  <div class="s" data-k="nebFlow"><span class="n">雾化气流量<small>5–15 L/min,喷雾阶段用</small></span>
-    <button class="pm" data-d="-1" aria-label="雾化气流量减 0.5">−</button><span class="v"><span></span><small>L/min</small></span><button class="pm" data-d="1" aria-label="雾化气流量加 0.5">+</button><button class="ap">应用</button></div>
-  <div class="s" data-k="exposeMin"><span class="n">暴露时间<small>1–60 分钟</small></span>
-    <button class="pm" data-d="-1" aria-label="暴露时间减 1 分钟">−</button><span class="v"><span></span><small>分钟</small></span><button class="pm" data-d="1" aria-label="暴露时间加 1 分钟">+</button><button class="ap">应用</button></div>
-  <div class="s" data-k="circInExpose"><span class="n">暴露阶段循环泵<small>开:暴露时继续加热循环</small></span>
-    <div class="seg"><button data-v="0">关</button><button data-v="1">开</button></div><button class="ap">应用</button></div>
-</div>
-
-<div class="bot">
-  <button id="bMain" disabled>—</button>
-  <button id="bAck" hidden>确认报警</button>
-  <button id="bMute" hidden>消音</button>
+  <span id="tLabel"></span><span id="timer" class="num"></span>
+  <button id="bDet" aria-pressed="false">详情</button>
   <button id="bAbort" disabled>中止</button>
 </div>
 
-<div id="sheet" hidden role="alertdialog" aria-modal="true" aria-labelledby="sT">
-  <div class="box"><div class="t" id="sT"></div><div class="d" id="sD"></div>
-    <div class="b"><button id="sYes"></button><button id="sNo">取消</button></div></div>
+<div id="main">
+  <div class="left">
+    <div class="lbl">腹腔温度</div>
+    <div class="ipRow"><span id="ipMean">--</span><span class="unit">℃</span><span id="ipTag" hidden></span></div>
+    <div id="ipTg"></div>
+    <ul class="chk" aria-label="四项检查">
+      <li id="cDrug"><span class="m"></span><span>药液</span><span class="v"></span></li>
+      <li id="cGas"><span class="m"></span><span>加热气体</span><span class="v"></span></li>
+      <li id="cPress"><span class="m"></span><span>腹腔压力</span><span class="v"></span></li>
+      <li id="cNoz"><span class="m"></span><span>雾化气</span><span class="v"></span></li>
+    </ul>
+  </div>
+  <div class="right" id="rNext">
+    <div class="lbl">下一步</div>
+    <div id="next"></div>
+    <div id="nextSub"></div>
+    <button id="bMain" disabled>—</button>
+  </div>
+  <div class="right alarm" id="rAlarm" hidden role="alert">
+    <div id="aTitle"></div>
+    <div id="aDid"></div>
+    <ol id="aSteps"></ol>
+    <div class="abtn"><button id="bAck" class="big">确认报警</button><button id="bMute">消音</button></div>
+    <div id="aMore"></div>
+  </div>
 </div>
-<div id="stopNow" hidden role="alert"><div class="big">立即停止注射泵</div><div>雾化气已停,药液会不成雾直接滴入。<span id="stopWhy"></span></div></div>
+
+<div id="det" hidden>
+  <div class="nav" role="tablist">
+    <button role="tab" data-tab="pVal" aria-selected="true">数值</button>
+    <button role="tab" data-tab="pChart" aria-selected="false">曲线</button>
+    <button role="tab" data-tab="pSet" aria-selected="false">设置</button>
+    <button id="bEarly" hidden>提前结束暴露</button>
+  </div>
+  <div id="pVal" class="dp">
+    <table id="tVal">
+      <tr><th>名称</th><th>读数</th><th>保护传感器</th><th>设定</th><th>输出</th></tr>
+      <tr><td>注射筒加热套</td><td id="xSyr1"></td><td id="xSyr2"></td><td id="xSyrS"></td><td id="xSyrD"></td></tr>
+      <tr><td>喷头歧管</td><td id="xNoz1"></td><td id="xNoz2"></td><td id="xNozS"></td><td id="xNozD"></td></tr>
+      <tr><td>加湿罐出口</td><td id="xHumO"></td><td></td><td id="xHumS"></td><td id="xHumD"></td></tr>
+      <tr><td>加湿底座</td><td id="xHumP"></td><td></td><td></td><td></td></tr>
+      <tr><td>输气管喷头端</td><td id="xGas"></td><td></td><td id="xGasS"></td><td id="xTubeD"></td></tr>
+      <tr><td>腹腔探头 1 / 2</td><td id="xIp1"></td><td id="xIp2"></td><td></td><td></td></tr>
+      <tr><td>腹腔压力</td><td id="xPress"></td><td></td><td></td><td></td></tr>
+      <tr><td>雾化气压</td><td id="xNozP"></td><td></td><td></td><td></td></tr>
+      <tr><td>循环泵流量</td><td id="xFlow"></td><td></td><td id="xFlowS"></td><td id="xPumpD"></td></tr>
+    </table>
+  </div>
+  <div id="pChart" class="dp" hidden>
+    <svg id="chart" viewBox="0 0 620 344" role="img" aria-label="最近 30 分钟的腹腔平均温度、输气管喷头端气温、喷头歧管温度、注射筒温度和目标温度曲线"></svg>
+  </div>
+  <div id="pSet" class="dp" hidden>
+    <div class="s" data-k="target"><span class="n">目标温度<small>37.0–43.0 ℃</small></span>
+      <button class="pm" data-d="-1" aria-label="目标温度减 0.1">−</button><span class="v"><span></span><small>℃</small></span><button class="pm" data-d="1" aria-label="目标温度加 0.1">+</button><button class="ap">应用</button></div>
+    <div class="s" data-k="flow"><span class="n">循环流量<small>0–15 L/min</small></span>
+      <button class="pm" data-d="-1" aria-label="循环流量减 0.5">−</button><span class="v"><span></span></span><button class="pm" data-d="1" aria-label="循环流量加 0.5">+</button><button class="ap">应用</button></div>
+    <div class="s" data-k="nebFlow"><span class="n">雾化气流量<small>5–15 L/min</small></span>
+      <button class="pm" data-d="-1" aria-label="雾化气流量减 0.5">−</button><span class="v"><span></span></span><button class="pm" data-d="1" aria-label="雾化气流量加 0.5">+</button><button class="ap">应用</button></div>
+    <div class="s" data-k="exposeMin"><span class="n">暴露时间<small>1–60 分钟</small></span>
+      <button class="pm" data-d="-1" aria-label="暴露时间减 1 分钟">−</button><span class="v"><span></span></span><button class="pm" data-d="1" aria-label="暴露时间加 1 分钟">+</button><button class="ap">应用</button></div>
+    <div class="s" data-k="circInExpose"><span class="n">暴露时循环<small>继续加热腹腔</small></span>
+      <div class="seg"><button data-v="0">关</button><button data-v="1">开</button></div><button class="ap">应用</button></div>
+  </div>
+</div>
+
+<div class="bar"><span id="sText" role="status"></span><span class="sp"></span><span id="devId"></span></div>
+
+<div id="sheet" hidden role="alertdialog" aria-modal="true" aria-labelledby="sT">
+  <div id="sT"></div><div id="sD"></div>
+  <div class="sb"><button id="sYes"></button><button id="sNo">取消</button></div>
+  <div id="sAuto">10 秒内不按,自动取消。</div>
+</div>
 <div id="dead" hidden role="alert"><div class="big" id="dBig"></div><p id="dP1"></p><p id="dP2"></p><p class="neb" id="dNeb" hidden>最后一次收到时正在喷雾:先停注射泵。</p></div>
 
 <script src="/common.js"></script>
 <script>
 'use strict';
 const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
-const NEED_ACK = ['IP_HIGH', 'PRESS_HIGH', 'PRESS_LOW', 'WATER_LOW', 'NOZ_BLOCK', 'EXPOSE_END'];
+const LIVE = ['PREHEAT', 'READY', 'NEBULIZE', 'EXPOSE'];
 const SER = [{k: 'ipMean', cn: '腹腔平均', c: 'var(--s1)', w: 3}, {k: 'gasEnd', cn: '输气管喷头端', c: 'var(--s2)', w: 2},
   {k: 'noz', cn: '喷头歧管', c: 'var(--s3)', w: 2}, {k: 'syr', cn: '注射筒', c: 'var(--s4)', w: 2}];
 // 设置项:设备上报的字段、范围、每按一次改多少
-const SETS = {target: {f: 'target', min: 37, max: 43, step: 0.1, n: 1, cn: '目标温度'},
-  flow: {f: 'flowSet', min: 0, max: 15, step: 0.5, n: 1, cn: '循环流量'},
-  nebFlow: {f: 'nebFlow', min: 5, max: 15, step: 0.5, n: 1, cn: '雾化气流量'},
-  exposeMin: {f: 'exposeMin', min: 1, max: 60, step: 1, n: 0, cn: '暴露时间'}};
+const SETS = {target: {f: 'target', min: 37, max: 43, step: 0.1, n: 1, u: '', cn: '目标温度'},
+  flow: {f: 'flowSet', min: 0, max: 15, step: 0.5, n: 1, u: 'L/min', cn: '循环流量'},
+  nebFlow: {f: 'nebFlow', min: 5, max: 15, step: 0.5, n: 1, u: 'L/min', cn: '雾化气流量'},
+  exposeMin: {f: 'exposeMin', min: 1, max: 60, step: 1, n: 0, u: '分钟', cn: '暴露时间'}};
 let cur = new URLSearchParams(location.search).get('dev') || '', dev = null, st = null, netOk = true;
-let note = '', noteUntil = 0, tab = 'pRun', sheetTimer = 0, pts = [], histNow = 0;
+let note = '', noteUntil = 0, view = 'main', sub = 'pVal', sheetTimer = 0, pts = [], histNow = 0, lastHighKey = '', lastPh = '';
 const pend = {};   // 设置页上改了还没应用的值
 
 function setText(sel, text) { const e = typeof sel === 'string' ? $(sel) : sel; if (e.textContent !== text) e.textContent = text; }
@@ -188,35 +232,41 @@ async function send(kind, what, value) {
   return r.ok;
 }
 
-// ---------- 页签 ----------
-function showTab(id) {
-  tab = id;
-  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
-  ['pRun', 'pChart', 'pSet'].forEach(p => { $('#' + p).hidden = p !== id; });
-  for (const k in pend) delete pend[k];   // 换页签就丢掉没应用的修改,免得回来时看到过时的数
+// ---------- 主屏 / 详情 ----------
+function showView(v) {
+  view = v;
+  $('#main').hidden = v !== 'main'; $('#det').hidden = v !== 'det';
+  setText('#bDet', v === 'det' ? '主屏' : '详情'); $('#bDet').classList.toggle('on', v === 'det');
+  for (const k in pend) delete pend[k];   // 离开设置就丢掉没应用的修改,免得回来看到过时的数
+  if (v === 'det' && sub === 'pChart') tickHist();
+  paint();
+}
+function showSub(id) {
+  sub = id;
+  $$('.nav [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
+  ['pVal', 'pChart', 'pSet'].forEach(p => { $('#' + p).hidden = p !== id; });
+  for (const k in pend) delete pend[k];
   if (id === 'pChart') tickHist();
   paint();
 }
-$$('.tabs button').forEach(b => { b.onclick = () => showTab(b.dataset.tab); });
+$('#bDet').onclick = () => showView(view === 'main' ? 'det' : 'main');
+$$('.nav [data-tab]').forEach(b => { b.onclick = () => showSub(b.dataset.tab); });
 
 // ---------- 再确认一次 ----------
 function ask(title, detail, yes, fn) {
   setText('#sT', title); setText('#sD', detail); setText('#sYes', yes);
   $('#sheet').hidden = false;
   $('#sYes').onclick = () => { closeSheet(); fn(); };
-  clearTimeout(sheetTimer); sheetTimer = setTimeout(closeSheet, 10000);   // 10 秒没选就当取消
+  clearTimeout(sheetTimer); sheetTimer = setTimeout(closeSheet, 10000);
 }
 function closeSheet() { clearTimeout(sheetTimer); $('#sheet').hidden = true; }
 $('#sNo').onclick = closeSheet;
 
 $('#bAbort').onclick = () => ask('确认中止?', '加热和循环泵立即全关,转入排气阶段,不能恢复。', '确认中止', () => send('abort', '中止'));
-$('#bMain').onclick = () => {
-  const a = dev && ACTION[dev.last.ph];
-  if (!a) return;
-  if (a.confirm) ask(a.confirm, a.hint, '确认' + a.label, () => send(a.kind, a.label));
-  else send(a.kind, a.label);
-};
-$('#bAck').onclick = () => send('ack', '确认报警');
+$('#bEarly').onclick = () => { const e = ACTION.EXPOSE.early; ask(e.confirm, e.detail, '确认提前结束', () => send(e.kind, e.label)); };
+function doMain() { const a = dev && ACTION[dev.last.ph]; if (a && a.kind) send(a.kind, a.label); }
+$('#bMain').onclick = doMain;
+$('#bAck').onclick = () => { if ($('#bAck').dataset.mode === 'main') doMain(); else send('ack', '确认报警'); };
 $('#bMute').onclick = () => send('mute', '消音');
 
 // ---------- 设置 ----------
@@ -245,8 +295,8 @@ $$('#pSet .s').forEach(row => {
   row.querySelector('.ap').onclick = async () => {
     if (!(k in pend)) return;
     const v = pend[k], s = SETS[k];
-    const what = k === 'circInExpose' ? '暴露阶段循环泵改为' + (v ? '开' : '关') : s.cn + '改为 ' + v.toFixed(s.n);
-    await send(k, what, v);   // 成功后等设备上报的值和它一样,再自动去掉“未应用”
+    const what = k === 'circInExpose' ? '暴露时循环改为' + (v ? '开' : '关') : s.cn + '改为 ' + v.toFixed(s.n);
+    await send(k, what, v);   // 成功后等设备上报的值和它一样,“应用”自动变回“已生效”
   };
 });
 function paintSet(on) {
@@ -267,14 +317,43 @@ function paintSet(on) {
   });
 }
 
-// ---------- 运行页 ----------
-function row(key, v, n, set, duty, on) {
-  setText('#v' + key, fx(v, n));
-  setText('#s' + key, on ? '设定 ' + fx(set, 1) : '关');
-  const d = isNum(duty) ? Math.max(0, Math.min(100, duty)) : 0;
-  $('#d' + key).style.width = d + '%';
-  setText('#p' + key, d.toFixed(0) + '%');
+// ---------- 四项检查 ----------
+// 返回 {st: ok / warn / bad / off, v: 一句话}。差多少都相对目标温度说。
+function checks(L) {
+  const t = L.t || {}, tg = L.target, al = L.al || [], ph = L.ph, rd = readiness(L), d1 = x => fx(Math.abs(x), 1);
+  const gap = v => (v < tg ? ',还差 ' : ',高 ') + d1(v - tg) + ' ℃';
+  const out = {};
+  // 药液:注射筒加热套和喷头歧管
+  if (!channelOn(L, 'syr')) out.drug = {st: 'off', v: '加热已关'};
+  else if (![t.syr1, t.syr2, t.noz1, t.noz2].every(isNum)) out.drug = {st: 'bad', v: '传感器没有读数'};
+  else if (rd.syr && rd.noz) out.drug = {st: 'ok', v: fx((t.syr1 + t.noz1) / 2) + ' ℃'};
+  else {
+    const w = [t.syr1, t.noz1].reduce((a, b) => Math.abs(b - tg) > Math.abs(a - tg) ? b : a);
+    out.drug = {st: al.includes('OVERTEMP_DRUG') ? 'bad' : 'warn', v: fx(w) + ' ℃' + gap(w)};
+  }
+  // 加热气体:输气管喷头端
+  if (!channelOn(L, 'tube')) out.gas = {st: 'off', v: '加热已关'};
+  else if (!isNum(t.gasEnd)) out.gas = {st: 'bad', v: '传感器没有读数'};
+  else if (rd.gas && t.gasEnd <= tg + 1.5) out.gas = {st: 'ok', v: fx(t.gasEnd) + ' ℃'};
+  else out.gas = {st: al.includes('OVERTEMP_GAS') ? 'bad' : 'warn', v: fx(t.gasEnd) + ' ℃' + gap(t.gasEnd)};
+  // 腹腔压力
+  const p = L.press, pv = fx(p, 0) + ' mmHg';
+  if (!LIVE.includes(ph)) out.press = {st: 'off', v: pv};
+  else if (al.includes('PRESS_HIGH') || al.includes('PRESS_LOW')) out.press = {st: 'bad', v: pv + (p >= 18 ? ',高于 18' : ',可能漏气')};
+  else if (!isNum(p)) out.press = {st: 'bad', v: '没有读数'};
+  else if (p >= 18) out.press = {st: 'bad', v: pv + ',高于 18'};
+  else if (p < 8) out.press = {st: 'warn', v: pv + (ph === 'PREHEAT' ? ',气腹未建立' : ',低于 8')};
+  else out.press = {st: 'ok', v: pv};
+  // 雾化气:只在喷雾阶段有意义
+  const z = L.nozP, zv = fx(z, 0) + ' kPa';
+  if (ph !== 'NEBULIZE') out.noz = {st: 'off', v: '喷雾时才用'};
+  else if (nebStopped(L) || al.includes('NOZ_BLOCK')) out.noz = {st: 'bad', v: al.includes('NOZ_BLOCK') ? zv + ',喷头堵塞' : '已停'};
+  else if (!isNum(z) || z < 30) out.noz = {st: 'warn', v: zv + ',低于 30'};
+  else out.noz = {st: 'ok', v: '正常 ' + zv};
+  return out;
 }
+const MARK = {ok: '✓', warn: '✕', bad: '✕', off: '–'};
+const CHK_CN = {drug: '药液', gas: '加热气体', press: '腹腔压力', noz: '雾化气'};
 
 // ---------- 整屏状态:主控无响应 ----------
 function dead(kind, L, ago) {
@@ -298,83 +377,133 @@ function dead(kind, L, ago) {
   $('#dNeb').hidden = !(kind !== 'wait' && L && L.ph === 'NEBULIZE');
 }
 
+// ---------- 报警卡 ----------
+function paintAlarm(L, on) {
+  const al = alarmsSorted(L.al), stop = nebStopped(L), show = al.length > 0 || stop;
+  $('#rAlarm').hidden = !show; $('#rNext').hidden = show;
+  if (!show) return;
+  let top = al[0], info = alarmInfo(top), lv = info.lv, title = info.cn, did = info.did, steps = (info.steps || []).slice();
+  if (stop) {   // 喷雾中雾化气停了:第一步永远是立即停止注射泵
+    top = al.find(a => PUMP_STOP_ALARMS.includes(a)) || top;
+    info = top ? alarmInfo(top) : {steps: []};
+    lv = 'high'; title = top ? info.cn : '雾化气已停';
+    did = '雾化气已停,药液会不成雾直接滴入。';
+    steps = ['立即停止注射泵'].concat(info.steps || []);
+  }
+  $('#rAlarm').className = 'right alarm ' + lv;
+  setText('#aTitle', title); setText('#aDid', did);
+  const ol = $('#aSteps'), want = steps.slice(0, 3);
+  if (ol.dataset.k !== want.join('|') + stop) {
+    ol.dataset.k = want.join('|') + stop; ol.textContent = '';
+    want.forEach((s, i) => { const li = document.createElement('li'); li.textContent = s; if (stop && i === 0) li.className = 'stop'; ol.append(li); });
+  }
+  const more = al.filter(a => a !== top).length;
+  setText('#aMore', more ? '还有 ' + more + ' 个报警,处理完这一个会显示下一个' : '');
+  // 能确认的报警:大按钮是“确认报警”。只是提示、不能确认的报警:大按钮换成这一阶段的主操作,免得被卡住
+  const ackable = al.some(a => alarmInfo(a).ack), a = ACTION[L.ph], b = $('#bAck');
+  if (ackable || !(a && a.kind)) { b.dataset.mode = 'ack'; setText(b, '确认报警'); b.hidden = !ackable; }
+  else { b.dataset.mode = 'main'; setText(b, a.label); b.hidden = false; }
+  b.disabled = !on || (b.dataset.mode === 'main' && L.ph === 'PREHEAT' && !readiness(L).heat);
+  setText('#bMute', L.muted ? '已消音' : '消音'); $('#bMute').disabled = !on;
+}
+
+// ---------- 详情:数值 ----------
+function paintVal(L) {
+  const t = L.t || {}, d = L.duty || {}, tg = L.target, c = v => fx(v) + ' ℃', pc = v => (isNum(v) ? Math.round(v) : '--') + '%';
+  const sv = (ch, v) => channelOn(L, ch) ? c(v) : '关';
+  const set = {xSyr1: c(t.syr1), xSyr2: c(t.syr2), xSyrS: sv('syr', tg), xSyrD: pc(d.syr),
+    xNoz1: c(t.noz1), xNoz2: c(t.noz2), xNozS: sv('noz', tg), xNozD: pc(d.noz),
+    xHumO: c(t.humOut), xHumS: sv('hum', isNum(tg) ? tg + 1 : null), xHumD: pc(d.hum), xHumP: c(t.humPlate),
+    xGas: c(t.gasEnd), xGasS: sv('tube', tg), xTubeD: pc(d.tube), xIp1: c(t.ip1), xIp2: c(t.ip2),
+    xPress: fx(L.press, 0) + ' mmHg', xNozP: fx(L.nozP, 0) + ' kPa',
+    xFlow: fx(L.flow) + ' L/min', xFlowS: channelOn(L, 'pump') ? fx(pumpSet(L)) : '关', xPumpD: pc(d.pump)};
+  for (const id in set) setText('#' + id, set[id]);
+}
+
 function paint() {
   if (!netOk) { dead('srv', dev && dev.last); closeSheet(); return; }
   if (!dev) { dead('wait'); closeSheet(); return; }
-  const L = dev.last, t = L.t || {}, duty = L.duty || {}, al = L.al || [], ph = L.ph, on = dev.online, tg = L.target;
+  const L = dev.last, t = L.t || {}, al = L.al || [], ph = L.ph, on = dev.online, tg = L.target, a = ACTION[ph] || {};
   dead(on ? '' : 'off', L, st ? st.now - dev.seen : 0);
   if (!on) closeSheet();
 
+  // 换了阶段、出现新的高级报警或喷雾中停泵:自动回到主屏
+  const highKey = (nebStopped(L) ? 'STOP,' : '') + al.filter(x => alarmInfo(x).lv === 'high').join();
+  const jump = (highKey && highKey !== lastHighKey) || (lastPh && ph !== lastPh);
+  lastHighKey = highKey; lastPh = ph;
+  if (jump && view !== 'main') { showView('main'); return; }
+
+  // 顶栏
   setText('#phName', PH_CN[ph] || ph);
-  setText('#tLabel', ph === 'EXPOSE' ? '剩余' : ph === 'IDLE' ? '' : '已用时');
-  setText('#timer', ph === 'EXPOSE' ? mmss(L.exposeLeft) : ph === 'IDLE' ? '' : mmss(L.phSec));
-  $('#timer').className = ph === 'EXPOSE' ? 'cd' : '';
+  setText('#stepNo', a.step ? '第 ' + a.step + ' 步 / 共 5 步' : '');
+  setText('#tLabel', ph === 'EXPOSE' ? '剩余' : LIVE.includes(ph) || ph === 'EVAC' ? '已用时' : '');
+  setText('#timer', ph === 'EXPOSE' ? mmss(L.exposeLeft) : LIVE.includes(ph) || ph === 'EVAC' ? mmss(L.phSec) : '');
+  $('#bAbort').disabled = !on || !LIVE.includes(ph);
+  setText('#devId', dev.id);
 
-  // 提示条:报警 > 刚才操作的回话 > 结束时的记录 > 本阶段提示
-  const lv = alarmLevel(al), a = ACTION[ph], rd = readiness(L), strip = $('#strip');
-  const c = dev.case, lc = dev.lastCase;
-  strip.className = lv;
-  if (al.length) setText(strip, al.map(x => alarmInfo(x).cn).join(' · ') + '。' + alarmInfo(al[0]).did);
-  else if (Date.now() < noteUntil) setText(strip, note);
-  else if (ph === 'DONE' && c) { strip.className = 'saved'; setText(strip, '本次记录已保存:' + c.id + '.csv,共 ' + c.rows + ' 行。'); }
-  else if (ph === 'PREHEAT') setText(strip, '等待到温:' + [['syr', '注射筒'], ['noz', '喷头歧管'], ['gas', '气体'], ['ip', '腹腔']].map(x => x[1] + (rd[x[0]] ? ' ✓' : ' …')).join('  '));
-  else if (ph === 'IDLE' && lc) setText(strip, '上一次记录:' + lc.id + '.csv,共 ' + lc.rows + ' 行。点“开始预热”会自动开始新的记录。');
-  else setText(strip, a ? (a.short || a.hint) : '');
-
-  const stopNow = nebStopped(L);
-  $('#stopNow').hidden = !stopNow;
-  if (stopNow) setText('#stopWhy', nebStopWhy(L));
-
-  // 运行页
-  const isOn = ch => channelOn(L, ch);
-  row('Syr', t.syr1, 1, tg, duty.syr, isOn('syr'));
-  row('Noz', t.noz1, 1, tg, duty.noz, isOn('noz'));
-  row('Hum', t.humOut, 1, isNum(tg) ? tg + 1 : null, duty.hum, isOn('hum'));
-  row('Tube', t.gasEnd, 1, tg, duty.tube, isOn('tube'));
-  row('Pump', L.flow, 1, pumpSet(L), duty.pump, isOn('pump'));
-  setText('#ipMean', fx(ipMean(t))); $('#ipMean').className = al.includes('IP_HIGH') ? 'hi' : al.includes('IP_LOW') ? 'lo' : '';
+  // 左边:腹腔温度和四项检查
+  const m = ipMean(t), hi = al.includes('IP_HIGH') || (isNum(m) && m >= 43.5), tag = $('#ipTag');
+  setText('#ipMean', fx(m)); $('#ipMean').className = hi ? 'hi' : '';
+  tag.hidden = !(hi || LIVE.includes(ph));
+  if (hi) { tag.className = 'hi'; setText(tag, '过高'); }
+  else if (isNum(m) && isNum(tg) && m >= tg - 1) { tag.className = 'ok'; setText(tag, '已到温'); }
+  else { tag.className = 'heat'; setText(tag, '升温中'); }
   setText('#ipTg', '目标 ' + fx(tg) + ' ℃');
-  setText('#ip1', fx(t.ip1)); setText('#ip2', fx(t.ip2)); setText('#press', fx(L.press)); setText('#nozP', fx(L.nozP, 0));
-  $('#nozP').style.color = al.includes('NOZ_BLOCK') ? 'var(--crit)' : al.includes('NOZ_LOW') ? 'var(--warn)' : '';
+  const ck = checks(L);
+  for (const [id, k] of [['#cDrug', 'drug'], ['#cGas', 'gas'], ['#cPress', 'press'], ['#cNoz', 'noz']]) {
+    const li = $(id); li.className = ck[k].st;
+    setText(li.querySelector('.m'), MARK[ck[k].st]); setText(li.querySelector('.v'), ck[k].v);
+  }
 
-  paintSet(on);
+  // 右边:下一步,或者报警卡
+  const c = dev.case, lc = dev.lastCase;
+  setText('#next', a.next || '');
+  setText('#nextSub', ph === 'DONE' && c ? c.id + '.csv' + String.fromCharCode(10) + '共 ' + c.rows + ' 行' : ph === 'EXPOSE' ? '要提前结束,在“详情”里。'
+    : ph === 'IDLE' && lc ? '上一次记录:' + lc.id + '.csv' : '');
+  const bm = $('#bMain');
+  bm.hidden = !a.kind; setText(bm, a.label || '');
+  bm.disabled = !on || (ph === 'PREHEAT' && !readiness(L).heat);
+  paintAlarm(L, on);
 
-  // 底栏
-  const live = ['PREHEAT', 'READY', 'NEBULIZE', 'EXPOSE'].includes(ph);
-  setText('#bMain', a ? a.label : '—');
-  $('#bMain').disabled = !on || !a || (ph === 'PREHEAT' && !rd.heat);
-  $('#bAbort').disabled = !on || !live;
-  $('#bAck').hidden = !al.some(x => NEED_ACK.includes(x)); $('#bMute').hidden = !al.length;
-  setText('#bMute', L.muted ? '已消音' : '消音');
-  $('#bAck').disabled = $('#bMute').disabled = !on;
+  // 状态栏:报警 > 刚才操作的回话 > 一切正常 / 还差什么
+  const s = $('#sText'), names = alarmsSorted(al).map(x => alarmInfo(x).cn), notOk = Object.keys(ck).filter(k => ck[k].st === 'warn' || ck[k].st === 'bad');
+  if (names.length || nebStopped(L)) {
+    s.className = alarmLevel(al) === 'mid' && !nebStopped(L) ? 'warn' : 'bad';
+    setText(s, (names.length || 1) + ' 个报警:' + (names.length ? names.slice(0, 3).join('、') + (names.length > 3 ? ' 等' : '') : '雾化气已停'));
+  } else if (Date.now() < noteUntil) { s.className = 'off'; setText(s, note); }
+  else if (!LIVE.includes(ph)) { s.className = 'off'; setText(s, ph === 'IDLE' ? '待机:加热和循环泵都关着' : '加热和循环泵已全关'); }
+  else if (!notOk.length) { s.className = 'ok'; setText(s, '一切正常'); }
+  else { s.className = ph === 'PREHEAT' ? 'off' : 'warn'; setText(s, (ph === 'PREHEAT' ? '升温中,还没到:' : '注意:') + notOk.map(k => CHK_CN[k]).join('、')); }
+
+  // 详情
+  $('#bEarly').hidden = ph !== 'EXPOSE'; $('#bEarly').disabled = !on;
+  if (view === 'det') { paintVal(L); paintSet(on); }
 }
 
 // ---------- 曲线 ----------
 function drawChart() {
-  const svg = $('#chart'), W = 780, H = 284, ml = 40, mr = 170, mt = 26, mb = 26, pw = W - ml - mr, ph = H - mt - mb;
+  const svg = $('#chart'), W = 620, H = 344, ml = 44, mr = 196, mt = 34, mb = 30, pw = W - ml - mr, ph = H - mt - mb;
   const t1 = histNow || Date.now() / 1000, t0 = t1 - 1800;
   let lo = 36, hi = 45;
   for (const p of pts) for (const s of SER) if (isNum(p[s.k])) { lo = Math.min(lo, p[s.k]); hi = Math.max(hi, p[s.k]); }
   hi = Math.ceil(hi); lo = Math.max(0, Math.floor(lo - 0.5));
-  const step = hi - lo > 12 ? 5 : 1;
-  if (step === 5) lo = Math.floor(lo / 5) * 5;
+  const step = hi - lo > 12 ? 5 : hi - lo > 6 ? 2 : 1;
+  lo = Math.floor(lo / step) * step;
   const x = t => ml + (t - t0) / 1800 * pw, y = v => mt + (hi - v) / (hi - lo) * ph;
-  let g = '';
-  // 图例在左上,右端再直接标名称和当前值
-  let lx = ml;
-  for (const s of SER) { g += `<path d="M${lx} 10h18" style="stroke:${s.c}" stroke-width="3"/><text x="${lx + 24}" y="15">${s.cn}</text>`; lx += 34 + s.cn.length * 15; }
-  g += `<path d="M${lx} 10h18" style="stroke:var(--dim)" stroke-width="2" stroke-dasharray="5 4"/><text x="${lx + 24}" y="15">目标 ℃</text>`;
+  let g = '', lx = 0;
+  for (const s of SER) { g += `<path d="M${lx} 12h16" style="stroke:${s.c}" stroke-width="3"/><text class="l" x="${lx + 20}" y="19">${s.cn}</text>`; lx += 30 + s.cn.length * 20; }
+  g += `<path d="M${lx} 12h16" style="stroke:var(--dim)" stroke-width="2" stroke-dasharray="5 4"/><text class="l" x="${lx + 20}" y="19">目标</text>`;
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step)
-    g += `<path d="M${ml} ${y(v)}H${ml + pw}" style="stroke:var(--rule)"/><text x="${ml - 6}" y="${y(v) + 5}" text-anchor="end">${v}</text>`;
-  for (let mn = 30; mn >= 0; mn -= 10) {
+    g += `<path d="M${ml} ${y(v)}H${ml + pw}" style="stroke:var(--rule)"/><text x="${ml - 6}" y="${y(v) + 7}" text-anchor="end">${v}</text>`;
+  for (const mn of [30, 15, 0]) {
     const xx = ml + (30 - mn) / 30 * pw;
-    g += `<path d="M${xx} ${mt + ph}v5" style="stroke:var(--dim)"/><text x="${xx}" y="${H - 6}" text-anchor="${mn === 30 ? 'start' : mn === 0 ? 'end' : 'middle'}">${mn === 0 ? '现在' : mn + ' 分钟前'}</text>`;
+    g += `<text class="l" x="${xx}" y="${H - 4}" text-anchor="${mn === 30 ? 'start' : mn === 0 ? 'end' : 'middle'}">${mn === 0 ? '现在' : mn + ' 分钟前'}</text>`;
   }
   const path = k => {
     let d = '', prev = null;
     for (const p of pts) {
       if (!isNum(p[k]) || p.ts < t0) { prev = null; continue; }
-      d += (prev === null || p.ts - prev > 10 ? 'M' : 'L') + x(p.ts).toFixed(1) + ' ' + y(p[k]).toFixed(1);   // 断开超过 10 秒就断线,不连成直线
+      d += (prev === null || p.ts - prev > 10 ? 'M' : 'L') + x(p.ts).toFixed(1) + ' ' + y(p[k]).toFixed(1);   // 断开超过 10 秒就断线
       prev = p.ts;
     }
     return d;
@@ -383,19 +512,18 @@ function drawChart() {
   for (const s of SER.slice().reverse()) g += `<path d="${path(s.k)}" fill="none" style="stroke:${s.c}" stroke-width="${s.w}" stroke-linejoin="round" stroke-linecap="round"/>`;
   const last = pts.length ? pts[pts.length - 1] : null, labs = [];
   if (last && t1 - last.ts < 10) {
-    for (const s of SER) if (isNum(last[s.k])) labs.push({y: y(last[s.k]), c: s.c, text: s.cn + ' ' + last[s.k].toFixed(1), dash: ''});
-    if (isNum(last.target)) labs.push({y: y(last.target), c: 'var(--dim)', text: '目标 ' + last.target.toFixed(1), dash: '4 3'});
+    for (const s of SER) if (isNum(last[s.k])) labs.push({y: y(last[s.k]), c: s.c, text: s.cn + ' ' + last[s.k].toFixed(1)});
     labs.sort((a, b) => a.y - b.y);
-    for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 18);
-    for (let i = labs.length - 1; i >= 0; i--) labs[i].y = Math.min(labs[i].y, mt + ph - (labs.length - 1 - i) * 18);
-    for (const l of labs) g += `<path d="M${ml + pw + 6} ${l.y}h16" style="stroke:${l.c}" stroke-width="3" stroke-dasharray="${l.dash}"/><text class="e" x="${ml + pw + 28}" y="${l.y + 5}">${l.text}</text>`;
+    for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 24);
+    for (let i = labs.length - 1; i >= 0; i--) labs[i].y = Math.min(labs[i].y, mt + ph - (labs.length - 1 - i) * 24);
+    for (const l of labs) g += `<path d="M${ml + pw + 4} ${l.y}h12" style="stroke:${l.c}" stroke-width="3"/><text class="e l" x="${ml + pw + 20}" y="${l.y + 7}">${l.text}</text>`;
   } else if (!pts.length) {
-    g += `<text x="${ml + pw / 2}" y="${mt + ph / 2}" text-anchor="middle">最近 30 分钟没有数据</text>`;
+    g += `<text class="l" x="${ml + pw / 2}" y="${mt + ph / 2}" text-anchor="middle">最近 30 分钟没有数据</text>`;
   }
   svg.innerHTML = g;   // 只含上面拼出来的数字和固定文字
 }
 async function tickHist() {
-  if (!dev || tab !== 'pChart') return;
+  if (!dev || view !== 'det' || sub !== 'pChart') return;
   try { const j = await getJSON('/api/history?sec=1800&dev=' + encodeURIComponent(dev.id)); if (j.dev === cur) { pts = j.pts; histNow = j.now; drawChart(); } } catch (e) {}
 }
 

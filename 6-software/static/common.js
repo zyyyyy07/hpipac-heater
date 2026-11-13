@@ -5,36 +5,44 @@
 const PH_CN = {IDLE: '待机', PREHEAT: '预热', READY: '就绪', NEBULIZE: '喷雾', EXPOSE: '暴露', EVAC: '排气', DONE: '结束'};
 const STEPS = ['PREHEAT', 'READY', 'NEBULIZE', 'EXPOSE', 'EVAC', 'DONE'];
 
-// lv: high 高级 / mid 中级。did: 设备已经做了什么。fix: 怎样才能清除。
+// lv: high 高级 / mid 中级。did: 设备已经做了什么(一行)。steps: 处理步骤,最多三步,第一步最要紧,每步一行。
+// ack: 这条报警要按“确认报警”才清除。顺序就是严重程度,越靠前越严重。
 const ALARMS = {
-  OVERTEMP_DRUG: {lv: 'high', cn: '药液通路过温', did: '已关闭注射筒加热套和喷头歧管加热。', fix: '锁定,重新上电才能清除。'},
-  OVERTEMP_GAS: {lv: 'high', cn: '气体通路过温', did: '已关闭加湿底座、输气管加热和循环泵。', fix: '锁定,重新上电才能清除。'},
-  IP_HIGH: {lv: 'high', cn: '腹腔温度过高', did: '四路加热和循环泵已全部关闭。', fix: '降到 42.5 ℃ 以下后点“确认报警”才恢复。'},
-  SENSOR: {lv: 'high', cn: '温度传感器故障', did: '已关闭对应的加热通路。', fix: '锁定,重新上电才能清除。'},
-  PRESS_HIGH: {lv: 'high', cn: '腹腔压力过高', did: '已关闭循环泵。', fix: '压力回落后点“确认报警”。'},
-  PRESS_LOW: {lv: 'high', cn: '腹腔压力过低,可能漏气', did: '已关闭循环泵。', fix: '查明原因后点“确认报警”,循环泵才恢复。'},
-  WATER_LOW: {lv: 'mid', cn: '加湿罐可能缺水', did: '已关闭加湿底座加热。', fix: '加水后点“确认报警”,加热才恢复。'},
-  NOZ_BLOCK: {lv: 'high', cn: '喷头堵塞', did: '雾化气压超过 150 kPa,已关闭循环泵,现在不成雾。', fix: '检查喷嘴有没有堵、输气管有没有打折,排除后点“确认报警”,循环泵才恢复。'},
-  NOZ_LOW: {lv: 'mid', cn: '雾化气压不足', did: '雾化气压低于 30 kPa,雾滴会变粗。只是提示,设备没有做任何动作。', fix: '检查输气管和喷头接口有没有漏气、雾化气流量是不是设得太低。气压回升后自动消失。'},
-  PREHEAT_SLOW: {lv: 'mid', cn: '预热超过 60 分钟', did: '只是提示,设备没有做任何动作。', fix: ''},
-  IP_LOW: {lv: 'mid', cn: '腹腔温度偏低', did: '比目标低 2 ℃ 以上已持续 5 分钟。只是提示,设备没有做任何动作。', fix: ''},
-  EXPOSE_END: {lv: 'mid', cn: '暴露计时到', did: '已转入排气阶段,加热和循环泵全关。', fix: '点“确认报警”清除。'},
+  OVERTEMP_DRUG: {lv: 'high', cn: '药液通路过温', did: '注射筒和喷头歧管加热已关。', ack: false, steps: ['停用这一筒药液', '检查加热套和喷头歧管', '重新上电才能清除']},
+  OVERTEMP_GAS: {lv: 'high', cn: '气体通路过温', did: '加湿、输气管加热和循环泵已关。', ack: false, steps: ['检查加湿罐和输气管', '重新上电才能清除']},
+  IP_HIGH: {lv: 'high', cn: '腹腔温度过高', did: '四路加热和循环泵已全关。', ack: true, steps: ['等腹腔降到 42.5 ℃ 以下', '再按“确认报警”恢复']},
+  NOZ_BLOCK: {lv: 'high', cn: '喷头堵塞', did: '循环泵已停,不成雾。', ack: true, steps: ['检查喷嘴是否堵塞', '检查输气管有没有打折', '排除后按“确认报警”']},
+  PRESS_HIGH: {lv: 'high', cn: '腹腔压力过高', did: '循环泵已停。', ack: true, steps: ['检查气腹机设定和排气', '压力回落后按“确认报警”']},
+  PRESS_LOW: {lv: 'high', cn: '腹腔压力过低', did: '循环泵已停,可能漏气。', ack: true, steps: ['检查穿刺器和回路漏气', '查明后按“确认报警”']},
+  SENSOR: {lv: 'high', cn: '温度传感器故障', did: '对应的加热已关。', ack: false, steps: ['检查温度探头和插头', '重新上电才能清除']},
+  WATER_LOW: {lv: 'mid', cn: '加湿罐可能缺水', did: '加湿底座加热已关。', ack: true, steps: ['给加湿罐加水', '加好后按“确认报警”']},
+  NOZ_LOW: {lv: 'mid', cn: '雾化气压不足', did: '低于 30 kPa,雾滴会变粗。', ack: false, steps: ['检查喷头接口是否漏气', '在详情里调高雾化气流量']},
+  IP_LOW: {lv: 'mid', cn: '腹腔温度偏低', did: '比目标低 2 ℃ 已 5 分钟。', ack: false, steps: ['检查腹腔探头位置', '可在详情里打开暴露循环']},
+  EXPOSE_END: {lv: 'mid', cn: '暴露计时到', did: '已转入排气,加热和泵全关。', ack: true, steps: ['按“确认报警”', '然后经密闭系统排气']},
+  PREHEAT_SLOW: {lv: 'mid', cn: '预热超过 60 分钟', did: '只是提示,设备没有动作。', ack: false, steps: ['检查气腹是否已建立', '检查各路是否在升温']},
 };
-function alarmInfo(a) { return ALARMS[a] || {lv: 'high', cn: a, did: '', fix: ''}; }
+const ALARM_ORDER = Object.keys(ALARMS);
+function alarmInfo(a) { return ALARMS[a] || {lv: 'high', cn: a, did: '', ack: false, steps: []}; }
 function alarmLevel(al) {
   if (!al || !al.length) return '';
   return al.some(a => alarmInfo(a).lv === 'high') ? 'high' : 'mid';
 }
+// 按严重程度排好的报警列表;不认识的报警当高级,排最前
+function alarmsSorted(al) {
+  const rank = a => { const i = ALARM_ORDER.indexOf(a); return i < 0 ? -1 : i; };
+  return (al || []).slice().sort((x, y) => rank(x) - rank(y));
+}
 
-// 每个阶段只有一个主操作。confirm: 点了以后还要再确认一次。
+// 各阶段主屏写什么(1-design/touchscreen-ui.md 第 5 节)。step: 第几步(共 5 步)。
+// kind/label: 唯一的主按钮;没有 kind 表示这一阶段不需要人做事。confirm: 按了还要再确认一次。
 const ACTION = {
-  IDLE: {kind: 'preheat', label: '开始预热', hint: '四路加热和循环泵会同时启动。'},
-  PREHEAT: {kind: 'ready', label: '手动确认就绪', hint: '气腹建立(压力到 8 mmHg)后循环泵才转。条件都满足时会自动转入就绪。腹腔温度迟迟不到时,可以在四路到温后手动确认。'},
-  READY: {kind: 'nebulize', label: '开始喷雾', hint: '点了以后循环泵改按雾化气流量送气。等雾化气压稳定,再启动注射泵推药。', short: '点后循环泵改送雾化气,气压稳定后再启动注射泵。'},
-  NEBULIZE: {kind: 'expose', label: '喷雾结束,开始计时', hint: '循环泵正在送雾化气,泵一停就不成雾。注射泵推完药后点这里,开始暴露计时,注射筒和喷头歧管加热会关闭。', short: '循环泵正在送雾化气。注射泵推完药后点下面的按钮。'},
-  EXPOSE: {kind: 'evac', label: '提前结束', hint: '计时到了会自动转入排气。', confirm: '提前结束暴露,转入排气?'},
-  EVAC: {kind: 'finish', label: '结束手术', hint: '经密闭排气系统把气腹排空之后再点。'},
-  DONE: {kind: 'finish', label: '确认,回到待机', hint: '本次手术已结束,记录已自动保存。'},
+  IDLE: {step: 0, kind: 'preheat', label: '开始预热', next: '装好喷头和回路、建立气腹后开始预热。'},
+  PREHEAT: {step: 1, kind: 'ready', label: '不等腹腔,直接就绪', next: '等待各项到温,到温后自动进入就绪。腹腔温度可以不等,手动确认。'},
+  READY: {step: 2, kind: 'nebulize', label: '开始喷雾', next: '按“开始喷雾”,等雾化气压稳定后启动注射泵。'},
+  NEBULIZE: {step: 3, kind: 'expose', label: '喷雾结束', next: '启动注射泵推药。推完后按下面的按钮。'},
+  EXPOSE: {step: 4, next: '无需操作。药雾停留,剩余时间见右上角。', early: {kind: 'evac', label: '提前结束暴露', confirm: '提前结束暴露?', detail: '马上转入排气阶段,暴露计时停止,不能恢复。'}},
+  EVAC: {step: 5, kind: 'finish', label: '排气完成', next: '经密闭排气系统排空气腹。排完后按下面的按钮。'},
+  DONE: {step: 0, kind: 'finish', label: '回到待机', next: '本次记录已保存。'},
 };
 
 function esc(s) {
@@ -108,4 +116,4 @@ async function postJSON(url, body) {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = {PH_CN, STEPS, ALARMS, ACTION, alarmInfo, alarmLevel, esc, fx, mmss, ipMean, readiness, channelOn, pumpSet, ledState, PUMP_STOP_ALARMS, nebStopped, nebStopWhy};
+if (typeof module !== 'undefined') module.exports = {PH_CN, STEPS, ALARMS, ACTION, alarmInfo, alarmLevel, alarmsSorted, esc, fx, mmss, ipMean, readiness, channelOn, pumpSet, ledState, PUMP_STOP_ALARMS, nebStopped, nebStopWhy};

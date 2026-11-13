@@ -257,7 +257,10 @@ def main(tmp):
     check("触摸屏页面有全部操作:阶段按钮、中止再确认、确认报警、消音、五项设置、曲线页",
           all(w in local for w in ('id="bMain"', 'id="bAbort"', "确认中止", 'id="bAck"', 'id="bMute"', 'data-tab="pChart"', 'data-tab="pSet"'))
           and all('data-k="%s"' % k in local for k in ("target", "flow", "nebFlow", "exposeMin", "circInExpose")))
-    check("触摸屏页面有“主控无响应”整屏状态和“本次记录已保存”", "主控无响应" in local and "本次记录已保存" in local)
+    common = open(os.path.join(HERE, "static", "common.js"), encoding="utf-8").read()
+    check("触摸屏页面有“主控无响应”整屏状态;结束阶段写“本次记录已保存”", "主控无响应" in local and "本次记录已保存" in common and "c.id + '.csv" in local)
+    check("各阶段按钮文字按 touchscreen-ui.md:排气完成、回到待机、喷雾结束、不等腹腔直接就绪",
+          all(w in common for w in ("label: '排气完成'", "label: '回到待机'", "label: '喷雾结束'", "label: '不等腹腔,直接就绪'", "label: '提前结束暴露'")))
     check("页面不再指向已经去掉的页面", "/console" not in pages and "/cases" not in pages)
 
     # ---- 曲线数据 ----
