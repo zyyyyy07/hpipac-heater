@@ -3,7 +3,7 @@
 <title>本机屏 · hPIPAC 加热系统</title>
 <style>
 /* 给主机上的 7 英寸触摸屏用,固定 800×480,不滚动。按钮高度都在 60 px 以上,戴手套也能点。 */
-:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--line:#2a444d;--ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc}
+:root{--ff:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--rule:#2a444d;--ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc}
 *{box-sizing:border-box}
 html,body{margin:0;width:800px;height:480px;overflow:hidden}
 body{background:var(--bg);color:var(--fg);font:18px/1.3 "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;font-variant-numeric:tabular-nums;
@@ -14,7 +14,7 @@ body{background:var(--bg);color:var(--fg);font:18px/1.3 "Microsoft YaHei","PingF
 #timer{font-size:32px;font-weight:700}
 #tLabel{font-size:16px;color:var(--dim)}
 .sp{flex:1}
-.pill{padding:1px 10px;border-radius:12px;border:1px solid var(--line);color:var(--dim);font-size:16px}
+.pill{padding:1px 10px;border-radius:12px;border:1px solid var(--rule);color:var(--dim);font-size:16px}
 .pill.on{border-color:var(--ok);color:var(--ok)}.pill.off{background:var(--crit);border-color:var(--crit);color:#fff}
 #strip{display:flex;align-items:center;padding:0 14px;font-size:18px;color:var(--dim);white-space:nowrap;overflow:hidden}
 #strip.high{background:var(--crit);color:#fff;font-weight:700}#strip.mid{background:var(--warn);color:#201500;font-weight:700}
@@ -29,7 +29,7 @@ body{background:var(--bg);color:var(--fg);font:18px/1.3 "Microsoft YaHei","PingF
 .bw span{text-align:right}
 .ip{background:var(--card);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column}
 .ip h2{margin:0;font-size:16px;font-weight:400;color:var(--dim)}
-#ipMean{font-size:72px;font-weight:700;line-height:1.05}
+#ipMean{font:700 72px/1.05 var(--ff);font-variant-numeric:tabular-nums}
 #ipMean.hi{color:var(--crit)}#ipMean.lo{color:var(--warn)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:15px;color:var(--dim);margin-top:auto}
 .two b{display:block;font-size:24px;color:var(--fg)}
@@ -41,18 +41,23 @@ button:disabled{opacity:.35}
 #bAbort{border-color:var(--crit);color:var(--crit);font-size:26px}
 #bAbort.arm{background:var(--crit);color:#fff;font-size:20px}
 [hidden]{display:none!important}
+/* 喷雾阶段雾化气停了:盖住顶上两行,是整屏最大的字 */
+#stopNow{position:absolute;left:0;top:0;width:800px;height:96px;background:var(--crit);color:#fff;padding:4px 14px;z-index:5;font-size:19px;font-weight:700;white-space:nowrap;overflow:hidden}
+#stopNow .big{font:700 60px/1.08 var(--ff);letter-spacing:2px}
+#ipMean.small{font-size:56px}
 </style></head><body>
 <div class="top">
   <span id="phName">—</span><span id="tLabel"></span><span id="timer"></span>
   <span class="sp"></span><span id="devId" class="dim"></span><span id="link" class="pill">正在连接</span>
 </div>
 <div id="strip"></div>
+<div id="stopNow" hidden role="alert"><div class="big">立即停止注射泵</div><div>雾化气已停,药液会不成雾直接滴入。<span id="stopWhy"></span></div></div>
 <div class="mid2">
   <div class="ch">
     <div class="r"><span class="n">注射筒</span><b><span id="vSyr">--</span><small>℃</small></b><span class="sv" id="sSyr"></span><div class="bw"><div class="bar"><i id="dSyr"></i></div><span id="pSyr"></span></div></div>
-    <div class="r"><span class="n">高压管</span><b><span id="vLine">--</span><small>℃</small></b><span class="sv" id="sLine"></span><div class="bw"><div class="bar"><i id="dLine"></i></div><span id="pLine"></span></div></div>
+    <div class="r"><span class="n">喷头歧管</span><b><span id="vNoz">--</span><small>℃</small></b><span class="sv" id="sNoz"></span><div class="bw"><div class="bar"><i id="dNoz"></i></div><span id="pNoz"></span></div></div>
     <div class="r"><span class="n">加湿罐出口</span><b><span id="vHum">--</span><small>℃</small></b><span class="sv" id="sHum"></span><div class="bw"><div class="bar"><i id="dHum"></i></div><span id="pHum"></span></div></div>
-    <div class="r"><span class="n">输气管病人端</span><b><span id="vTube">--</span><small>℃</small></b><span class="sv" id="sTube"></span><div class="bw"><div class="bar"><i id="dTube"></i></div><span id="pTube"></span></div></div>
+    <div class="r"><span class="n">输气管喷头端</span><b><span id="vTube">--</span><small>℃</small></b><span class="sv" id="sTube"></span><div class="bw"><div class="bar"><i id="dTube"></i></div><span id="pTube"></span></div></div>
     <div class="r"><span class="n">循环泵</span><b><span id="vPump">--</span><small>L/min</small></b><span class="sv" id="sPump"></span><div class="bw"><div class="bar"><i id="dPump"></i></div><span id="pPump"></span></div></div>
   </div>
   <div class="ip">
@@ -61,7 +66,7 @@ button:disabled{opacity:.35}
     <div id="ipTg" class="dim" style="font-size:16px"></div>
     <div class="two">
       <div>探头 1<b id="ip1">--</b></div><div>探头 2<b id="ip2">--</b></div>
-      <div>压力 mmHg<b id="press">--</b></div><div>高压管出口<b id="lineOut">--</b></div>
+      <div>腹压 mmHg<b id="press">--</b></div><div>雾化气压 kPa<b id="nozP">--</b></div>
     </div>
   </div>
 </div>
@@ -75,7 +80,7 @@ button:disabled{opacity:.35}
 <script>
 'use strict';
 const $ = s => document.querySelector(s), BY = '主机触摸屏';
-const NEED_ACK = ['IP_HIGH', 'PRESS_HIGH', 'PRESS_LOW', 'WATER_LOW', 'EXPOSE_END'];
+const NEED_ACK = ['IP_HIGH', 'PRESS_HIGH', 'PRESS_LOW', 'WATER_LOW', 'NOZ_BLOCK', 'EXPOSE_END'];
 let cur = new URLSearchParams(location.search).get('dev') || '', dev = null, note = '', noteUntil = 0, armed = '', armTimer = 0;
 
 function setText(sel, text) { const e = $(sel); if (e.textContent !== text) e.textContent = text; }
@@ -127,19 +132,24 @@ function paint() {
   if (!on) { strip.className = 'high'; setText('#strip', '和服务器之间的数据断了。这块屏不再更新,请看主机指示灯,用硬件按键操作。'); }
   else if (al.length) setText('#strip', al.map(x => alarmInfo(x).cn).join(' · ') + '。' + alarmInfo(al[0]).did);
   else if (Date.now() < noteUntil) setText('#strip', note);
-  else setText('#strip', ph === 'PREHEAT' ? '等待到温:' + [['syr', '注射筒'], ['line', '高压管'], ['gas', '气体'], ['ip', '腹腔']].map(x => x[1] + (rd[x[0]] ? ' ✓' : ' …')).join('  ') : a ? a.hint : '');
+  else setText('#strip', ph === 'PREHEAT' ? '等待到温:' + [['syr', '注射筒'], ['noz', '喷头歧管'], ['gas', '气体'], ['ip', '腹腔']].map(x => x[1] + (rd[x[0]] ? ' ✓' : ' …')).join('  ') : a ? (a.short || a.hint) : '');
+
+  const stopNow = nebStopped(L);
+  $('#stopNow').hidden = !stopNow; $('#ipMean').classList.toggle('small', stopNow);
+  if (stopNow) setText('#stopWhy', nebStopWhy(L));
 
   const isOn = ch => channelOn(L, ch);
   row('Syr', t.syr1, 1, tg, duty.syr, isOn('syr'));
-  row('Line', t.line1, 1, tg, duty.line, isOn('line'));
+  row('Noz', t.noz1, 1, tg, duty.noz, isOn('noz'));
   row('Hum', t.humOut, 1, isNum(tg) ? tg + 1 : null, duty.hum, isOn('hum'));
   row('Tube', t.gasEnd, 1, tg, duty.tube, isOn('tube'));
-  row('Pump', L.flow, 1, L.flowSet, duty.pump, isOn('pump'));
+  row('Pump', L.flow, 1, pumpSet(L), duty.pump, isOn('pump'));
 
   const m = ipMean(t);
   setText('#ipMean', fx(m)); $('#ipMean').className = al.includes('IP_HIGH') ? 'hi' : al.includes('IP_LOW') ? 'lo' : '';
   setText('#ipTg', '目标 ' + fx(tg) + ' ℃');
-  setText('#ip1', fx(t.ip1)); setText('#ip2', fx(t.ip2)); setText('#press', fx(L.press)); setText('#lineOut', fx(t.lineOut));
+  setText('#ip1', fx(t.ip1)); setText('#ip2', fx(t.ip2)); setText('#press', fx(L.press)); setText('#nozP', fx(L.nozP, 0));
+  $('#nozP').style.color = al.includes('NOZ_BLOCK') ? 'var(--crit)' : al.includes('NOZ_LOW') ? 'var(--warn)' : '';
 
   const bm = $('#bMain'), ba = $('#bAbort'), live = ['PREHEAT', 'READY', 'NEBULIZE', 'EXPOSE'].includes(ph);
   if (armed === 'main' && !(a && a.confirm)) disarm();

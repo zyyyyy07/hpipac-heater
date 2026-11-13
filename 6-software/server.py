@@ -29,22 +29,22 @@ HIST_KEEP_S = 7200     # 曲线数据保留 2 小时
 HIST_MAX_PTS = 900     # /api/history 一次最多返回的点数,多了就均匀抽稀
 
 PHASES = ("IDLE", "PREHEAT", "READY", "NEBULIZE", "EXPOSE", "EVAC", "DONE")
-SENSORS = ("syr1", "syr2", "line1", "line2", "lineOut", "humPlate", "humOut", "gasEnd", "ip1", "ip2")
-DUTIES = ("syr", "line", "hum", "tube", "pump")
+SENSORS = ("syr1", "syr2", "noz1", "noz2", "humPlate", "humOut", "gasEnd", "ip1", "ip2")
+DUTIES = ("syr", "noz", "hum", "tube", "pump")
 # 每种命令允许在哪些阶段下发。None 表示任何阶段都可以。设备固件还会再检查一遍。
 CMD_PHASE = {
     "preheat": ("IDLE",), "ready": ("PREHEAT",), "nebulize": ("READY",), "expose": ("NEBULIZE",),
     "evac": ("EXPOSE",), "finish": ("EVAC", "DONE"), "abort": None,
-    "target": None, "flow": None, "exposeMin": None, "circInExpose": None, "ack": None, "mute": None,
+    "target": None, "flow": None, "nebFlow": None, "exposeMin": None, "circInExpose": None, "ack": None, "mute": None,
 }
 CMD_CN = {"preheat": "开始预热", "ready": "手动确认就绪", "nebulize": "开始喷雾", "expose": "开始暴露计时",
-          "evac": "提前结束暴露", "finish": "结束手术", "abort": "中止", "target": "改目标温度", "flow": "改循环流量",
+          "evac": "提前结束暴露", "finish": "结束手术", "abort": "中止", "target": "改目标温度", "flow": "改循环流量", "nebFlow": "改雾化气流量",
           "exposeMin": "改暴露时间", "circInExpose": "改暴露阶段循环", "ack": "确认报警", "mute": "消音"}
 PH_CN = {"IDLE": "待机", "PREHEAT": "预热", "READY": "就绪", "NEBULIZE": "喷雾", "EXPOSE": "暴露", "EVAC": "排气", "DONE": "结束"}
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 ALARM_RE = re.compile(r"^[A-Z_]{1,24}$")
-CSV_HEAD = (["time", "epoch", "case", "label", "ph", "phSec", "exposeLeft", "target", "exposeMin", "flowSet", "circInExpose"]
-            + list(SENSORS) + ["press", "flow"] + ["duty_" + k for k in DUTIES] + ["alarms", "muted"])
+CSV_HEAD = (["time", "epoch", "case", "label", "ph", "phSec", "exposeLeft", "target", "exposeMin", "flowSet", "nebFlow", "circInExpose"]
+            + list(SENSORS) + ["press", "nozP", "flow"] + ["duty_" + k for k in DUTIES] + ["alarms", "muted"])
 
 lock = threading.RLock()
 S = {"devices": {}, "cases": {}}   # 会写进 data.json 的部分
@@ -98,9 +98,9 @@ def clean_telemetry(b):
     al = b.get("al") if isinstance(b.get("al"), list) else []
     return {
         "ph": b["ph"], "target": num(b.get("target")), "exposeMin": num(b.get("exposeMin")),
-        "flowSet": num(b.get("flowSet")), "circInExpose": b.get("circInExpose") is True,
+        "flowSet": num(b.get("flowSet")), "nebFlow": num(b.get("nebFlow")), "circInExpose": b.get("circInExpose") is True,
         "t": {k: num(t.get(k)) for k in SENSORS},
-        "press": num(b.get("press")), "flow": num(b.get("flow")),
+        "press": num(b.get("press")), "nozP": num(b.get("nozP")), "flow": num(b.get("flow")),
         "duty": {k: num(duty.get(k)) or 0 for k in DUTIES},
         "phSec": num(b.get("phSec")) or 0, "exposeLeft": num(b.get("exposeLeft")) if num(b.get("exposeLeft")) is not None else -1,
         "al": [a for a in al if isinstance(a, str) and ALARM_RE.match(a)][:16], "muted": b.get("muted") is True,
@@ -113,11 +113,11 @@ def ip_mean(t):
 
 
 def heaters_ready(L):
-    """药液两路都在目标 ±0.5 ℃ 内、病人端气温到目标 −1 ℃:手动确认就绪的前提。"""
+    """注射筒和喷头歧管都在目标 ±0.5 ℃ 内、喷头端气温到目标 −1 ℃:手动确认就绪的前提。"""
     t, tg = L.get("t") or {}, L.get("target")
     if tg is None:
         return False
-    pair = [t.get(k) for k in ("syr1", "syr2", "line1", "line2")]
+    pair = [t.get(k) for k in ("syr1", "syr2", "noz1", "noz2")]
     return all(x is not None and abs(x - tg) <= 0.5 for x in pair) and t.get("gasEnd") is not None and t["gasEnd"] >= tg - 1.0
 
 
@@ -145,8 +145,8 @@ def csv_row(c, L, now):
     t, duty = L["t"], L["duty"]
     f = lambda v: "" if v is None else v
     return ([time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)), round(now, 2), c["id"], csv_safe(c["label"]),
-             L["ph"], f(L["phSec"]), f(L["exposeLeft"]), f(L["target"]), f(L["exposeMin"]), f(L["flowSet"]), int(L["circInExpose"])]
-            + [f(t[k]) for k in SENSORS] + [f(L["press"]), f(L["flow"])] + [f(duty[k]) for k in DUTIES]
+             L["ph"], f(L["phSec"]), f(L["exposeLeft"]), f(L["target"]), f(L["exposeMin"]), f(L["flowSet"]), f(L["nebFlow"]), int(L["circInExpose"])]
+            + [f(t[k]) for k in SENSORS] + [f(L["press"]), f(L["nozP"]), f(L["flow"])] + [f(duty[k]) for k in DUTIES]
             + ["|".join(L["al"]), int(L["muted"])])
 
 
@@ -165,9 +165,9 @@ def api_telemetry(b):
     d["last"], d["seen"] = L, now
     t = L["t"]
     h = HIST.setdefault(did, deque(maxlen=120000))
-    h.append({"ts": round(now, 2), "ph": L["ph"], "target": L["target"], "syr": t["syr1"], "line": t["line1"],
-              "lineOut": t["lineOut"], "humOut": t["humOut"], "gasEnd": t["gasEnd"], "ip1": t["ip1"], "ip2": t["ip2"],
-              "ipMean": None if ip_mean(t) is None else round(ip_mean(t), 2), "press": L["press"], "flow": L["flow"]})
+    h.append({"ts": round(now, 2), "ph": L["ph"], "target": L["target"], "syr": t["syr1"], "noz": t["noz1"],
+              "humOut": t["humOut"], "gasEnd": t["gasEnd"], "ip1": t["ip1"], "ip2": t["ip2"],
+              "ipMean": None if ip_mean(t) is None else round(ip_mean(t), 2), "press": L["press"], "nozP": L["nozP"], "flow": L["flow"]})
     while h and now - h[0]["ts"] > HIST_KEEP_S:
         h.popleft()
     c = S["cases"].get(d["case"]) if d["case"] else None
@@ -196,6 +196,11 @@ def check_value(kind, v):
         x = num(v)
         if x is None or not 0 <= x <= 15:
             return None, "循环流量必须是 0 到 15 L/min 之间的数"
+        return round(x, 1), None
+    if kind == "nebFlow":
+        x = num(v)
+        if x is None or not 5 <= x <= 15:
+            return None, "雾化气流量必须是 5 到 15 L/min 之间的数"
         return round(x, 1), None
     if kind == "exposeMin":
         x = num(v)
@@ -233,7 +238,7 @@ def api_cmd(b):
     if CMD_PHASE[kind] is not None and ph not in CMD_PHASE[kind]:
         return reject(409, "现在是“%s”阶段,不能“%s”" % (PH_CN.get(ph, ph), CMD_CN[kind]))
     if kind == "ready" and not heaters_ready(d["last"]):
-        return reject(409, "注射筒、高压管、输气管还没有全部到温,不能手动确认就绪")
+        return reject(409, "注射筒、喷头歧管、输气管还没有全部到温,不能手动确认就绪")
     q = {"kind": kind, "by": by, "ts": time.time()}
     if val is not None:
         q["value"] = rec["value"] = val
@@ -336,11 +341,11 @@ def cases_page():
     body = "".join(rows) or "<tr><td colspan=8 class=dim>还没有手术记录。在控制台填手术编号,点“开始记录”。</td></tr>"
     return ("""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>手术记录 · hPIPAC 加热系统</title><style>
-:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--line:#2a444d;--acc:#49b8cc}
+:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--rule:#2a444d;--acc:#49b8cc}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Microsoft YaHei","PingFang SC",sans-serif;padding:20px}
 h1{font-size:22px;margin:0 0 4px}a{color:var(--acc)}.dim{color:var(--dim)}
-.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:14px}
-table{border-collapse:collapse;width:100%%;white-space:nowrap}th,td{padding:8px 14px;text-align:left;border-bottom:1px solid var(--line)}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--rule);border-radius:8px;margin-top:14px}
+table{border-collapse:collapse;width:100%%;white-space:nowrap}th,td{padding:8px 14px;text-align:left;border-bottom:1px solid var(--rule)}
 th{color:var(--dim);font-weight:400;font-size:14px}td.n{font-variant-numeric:tabular-nums}tr:last-child td{border-bottom:0}
 </style></head><body><h1>手术记录</h1>
 <div class="dim">每次遥测上报一行,包含全部传感器、阶段、各路输出和报警。<a href="/console">回到控制台</a></div>

@@ -71,9 +71,7 @@ function show(d){
   scene.add(group);size=d.size;applySec();if(shown!==d.id){fit();shown=d.id}
   const how=d.multi?'装配视图,仅供查看,不导出':{CNC:'CNC 加工 · 6061 铝',PRINT:'3D 打印',VIEW:'仅供查看,不导出'}[d.how],I=d.info;
   let h=`<b>${d.title}</b><div>${how}</div><div>外形 <span class="k">${d.size.join(' × ')}</span> mm${d.multi?'':` · 体积 <span class="k">${d.volume}</span> cm³`}${d.valid?'':' · <span style="color:#ef6a5b">实体无效</span>'}</div>`;
-  if(+d.id.slice(0,2)<=2) h+=`<div>槽内管长 <span class="k">${I.groove_len}</span> mm · 合模后孔 <span class="k">${I.bore[0]} × ${I.bore[1]}</span> mm</div>
-   <div>直槽中心 y = <span class="k">${I.run_y.join(', ')}</span></div><div>M3 螺丝 <span class="k">${I.screws.map(p=>'('+p+')').join(' ')}</span></div>
-   <div>定位销 <span class="k">${I.dowels.map(p=>'('+p+')').join(' ')}</span> · 测温孔 x = <span class="k">${I.ntc_x.join(', ')}</span>,高 <span class="k">${I.ntc_z}</span></div>`;
+  if(d.id.startsWith('01')||d.id.startsWith('20')) h+=`<div>环形气隙面积 <span class="k">${I.gas_area}</span> mm²(喷口直径和毛细管外径决定)</div>`;
   if(d.multi){const ks=[...new Set(d.parts.map(p=>p.kind))];h+='<div>'+ks.map(k=>`<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${KIND[k][0]};margin-right:5px"></span>${KIND[k][1]}`).join('　')+'</div>'}
   $('#hud').innerHTML=h}
 function applySec(){clip.constant=0;[matAl,matPr,matBuy,matSoft,matScr,matLn].forEach(m=>{m.clippingPlanes=sec?[clip]:[];m.needsUpdate=true})}

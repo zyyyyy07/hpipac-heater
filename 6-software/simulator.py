@@ -14,12 +14,13 @@
   overtemp_drug  注射筒加热失控升温                                → OVERTEMP_DRUG
   overtemp_gas   输气管加热失控升温                                → OVERTEMP_GAS
   sensor         注射筒保护传感器读数偏高 2.5 ℃                     → SENSOR
-  sensor_open    输气管病人端传感器断线(上报 null)                 → SENSOR
+  sensor_open    输气管喷头端传感器断线(上报 null)                 → SENSOR
   press_high     腹腔压力升到约 19.5 mmHg(默认持续 30 秒)          → PRESS_HIGH
   press_low      腹腔压力掉到约 4.5 mmHg(默认持续 30 秒;泵在转才报)→ PRESS_LOW
+  noz_block      喷嘴堵塞:泵一转雾化气压就升到 150 kPa 以上(默认持续 60 秒)→ NOZ_BLOCK
+  noz_low        喷头接口漏气:雾化气压只有正常的三成(喷雾阶段才报)  → NOZ_LOW
   water_low      加湿罐缺水:底座很热但出口气温上不去(泵在转才报)  → WATER_LOW
 压力故障只在气腹已经建立(预热 1 分钟以后到暴露结束)时才看得出来。
-  lid            高压管保温板被打开(默认持续 60 秒)                → LID
 """
 import json, math, random, sys, time, urllib.request
 
@@ -27,9 +28,9 @@ AMB = 22.0            # 室温
 BODY = 37.0           # 不循环时腹腔温度回落的方向
 PHASES = ("IDLE", "PREHEAT", "READY", "NEBULIZE", "EXPOSE", "EVAC", "DONE")
 LATCHED = ("OVERTEMP_DRUG", "OVERTEMP_GAS", "SENSOR")           # 只有重新上电才能清除
-NEED_ACK = ("IP_HIGH", "PRESS_HIGH", "PRESS_LOW", "WATER_LOW", "EXPOSE_END")   # 条件消失后还要按“确认”
-FAULT_DUR = {"ip_high": 180, "press_high": 30, "press_low": 30, "lid": 60}
-FAULTS = ("ip_high", "overtemp_drug", "overtemp_gas", "sensor", "sensor_open", "press_high", "press_low", "water_low", "lid")
+NEED_ACK = ("IP_HIGH", "PRESS_HIGH", "PRESS_LOW", "WATER_LOW", "NOZ_BLOCK", "EXPOSE_END")   # 条件消失后还要按“确认”
+FAULT_DUR = {"ip_high": 180, "press_high": 30, "press_low": 30, "noz_block": 60}
+FAULTS = ("ip_high", "overtemp_drug", "overtemp_gas", "sensor", "sensor_open", "press_high", "press_low", "water_low", "noz_block", "noz_low")
 
 
 def lag(cur, goal, tau, dt):
@@ -43,7 +44,7 @@ def parse_faults(spec):
         name, _, when = item.partition("@")
         start, _, dur = when.partition("+")
         if name not in FAULTS or not start:
-            sys.exit("看不懂的故障写法: %s。可用的名称: %s,写法如 ip_high@600 或 lid@300+60" % (item, " ".join(FAULTS)))
+            sys.exit("看不懂的故障写法: %s。可用的名称: %s,写法如 ip_high@600 或 noz_block@300+60" % (item, " ".join(FAULTS)))
         out.append((name, float(start), float(dur) if dur else FAULT_DUR.get(name, float("inf"))))
     return out
 
@@ -54,9 +55,10 @@ class Device:
         self.now = 0.0                                   # 设备时间,秒
         self.ph, self.phSec = "IDLE", 0.0
         self.target, self.exposeMin, self.flowSet, self.circ = 42.0, 30, 10.0, False
-        self.T = {"syr": AMB, "line": AMB, "lineOut": AMB, "humPlate": AMB, "humOut": AMB, "gasEnd": AMB, "ip1": 36.6, "ip2": 36.3}
+        self.nebFlow = 12.0                              # 喷雾阶段的雾化气流量
+        self.T = {"syr": AMB, "noz": AMB, "humPlate": AMB, "humOut": AMB, "gasEnd": AMB, "ip1": 36.6, "ip2": 36.3}
         self.ipOff = 0.0                                 # ip_high 故障的程度,0 到 1
-        self.press, self.flow = 0.0, 0.0             # 气腹还没建立,压力为 0
+        self.press, self.flow, self.nozP = 0.0, 0.0, 0.0   # 气腹还没建立,压力为 0;泵没转,雾化气压为 0
         self.pumpRun = 0.0                               # 循环泵已经连续运转的秒数
         self.al = set()
         self.tm = {}                                     # 各报警条件已经持续的秒数
@@ -64,7 +66,7 @@ class Device:
         self.ipSkip = False                              # 操作者已手动跳过腹腔温度条件
         self.lost = 0.0                                  # READY 里条件已经失去的秒数
         self.muteLeft = 0.0
-        self.on = dict.fromkeys(("syr", "line", "hum", "tube", "pump"), False)
+        self.on = dict.fromkeys(("syr", "noz", "hum", "tube", "pump"), False)
         self.duty = dict.fromkeys(self.on, 0)
         self.rd = {}                                     # 本拍的传感器读数(带噪声,可能是 None)
 
@@ -80,9 +82,13 @@ class Device:
         self.ph, self.phSec, self.lost = ph, 0.0, 0.0
         self.tm.pop("ip_low", None)
 
+    def flow_want(self):
+        """泵该按多大流量转:喷雾阶段用雾化气流量,其余阶段用循环流量。"""
+        return self.nebFlow if self.ph == "NEBULIZE" else self.flowSet
+
     def heat_ok(self):
         r, tg = self.rd, self.target
-        pair = [r.get(k) for k in ("syr1", "syr2", "line1", "line2")]
+        pair = [r.get(k) for k in ("syr1", "syr2", "noz1", "noz2")]
         return all(x is not None and abs(x - tg) <= 0.5 for x in pair) and r.get("gasEnd") is not None and r["gasEnd"] >= tg - 1.0
 
     def ip_mean(self):
@@ -127,6 +133,9 @@ class Device:
         elif k == "flow":
             if not (isnum and 0 <= v <= 15): return "流量超范围"
             self.flowSet = round(float(v), 1)
+        elif k == "nebFlow":
+            if not (isnum and 5 <= v <= 15): return "雾化气流量超范围"
+            self.nebFlow = round(float(v), 1)
         elif k == "exposeMin":
             if not (isnum and 1 <= v <= 60): return "暴露时间超范围"
             self.exposeMin = int(v)
@@ -137,6 +146,7 @@ class Device:
             r = self.rd
             if "IP_HIGH" in self.al and all(r.get(x) is None or r[x] < 42.5 for x in ("ip1", "ip2")): self.al.discard("IP_HIGH")
             if self.press < 18.0: self.al.discard("PRESS_HIGH")
+            if self.nozP < 150.0: self.al.discard("NOZ_BLOCK")
             self.al.discard("PRESS_LOW"); self.tm.pop("press_low", None)   # 泵停着时不判;恢复后还低会再报
             self.al.discard("WATER_LOW"); self.tm.pop("water", None)
             self.al.discard("EXPOSE_END")
@@ -156,24 +166,23 @@ class Device:
         ph, al = self.ph, self.al
         heat_drug = ph in ("PREHEAT", "READY", "NEBULIZE")
         heat_gas = ph in ("PREHEAT", "READY", "NEBULIZE", "EXPOSE")
-        on = {"syr": heat_drug, "line": heat_drug, "hum": heat_gas, "tube": heat_gas,
+        on = {"syr": heat_drug, "noz": heat_drug, "hum": heat_gas, "tube": heat_gas,
               # 预热阶段要等气腹建立(压力到 8 mmHg)泵才转
-              "pump": (ph == "PREHEAT" and self.press >= 8.0) or ph == "READY" or (ph == "EXPOSE" and self.circ)}
-        if "OVERTEMP_DRUG" in al: on["syr"] = on["line"] = False
+              # 喷雾阶段泵必须转:这股气就是雾化气
+              "pump": (ph == "PREHEAT" and self.press >= 8.0) or ph in ("READY", "NEBULIZE") or (ph == "EXPOSE" and self.circ)}
+        if "OVERTEMP_DRUG" in al: on["syr"] = on["noz"] = False
         if "OVERTEMP_GAS" in al: on["hum"] = on["tube"] = on["pump"] = False
         if "IP_HIGH" in al: on = dict.fromkeys(on, False)
-        if "PRESS_HIGH" in al or "PRESS_LOW" in al: on["pump"] = False
+        if "PRESS_HIGH" in al or "PRESS_LOW" in al or "NOZ_BLOCK" in al: on["pump"] = False
         if "WATER_LOW" in al: on["hum"] = False
-        if "LID" in al: on["line"] = False
         for ch in self.sensorOff: on[ch] = False
-        if self.flowSet <= 0: on["pump"] = False
+        if self.flow_want() <= 0: on["pump"] = False
         self.on = on
 
     def physics(self, dt):
         T, on, tg = self.T, self.on, self.target
         T["syr"] = lag(T["syr"], (45.5 if self.fault("overtemp_drug") else tg) if on["syr"] else AMB, 120 if on["syr"] else 900, dt)
-        T["line"] = lag(T["line"], tg if on["line"] else AMB, 90 if on["line"] else 700, dt)
-        T["lineOut"] = lag(T["lineOut"], T["line"] - (1.3 if on["line"] else 0.3), 60, dt)
+        T["noz"] = lag(T["noz"], tg if on["noz"] else AMB, 90 if on["noz"] else 700, dt)
         dry = self.fault("water_low")
         plate = 80.0 if dry else 58.0 + (tg - 37.0)
         if not on["pump"]: plate = min(plate, 55.0)      # 泵不转时底座降到待机温度(上限 60 ℃)
@@ -181,7 +190,7 @@ class Device:
         hum_goal = (tg - 5.0 if dry else tg + 1.0) if on["hum"] and T["humPlate"] > 45 else AMB + 4
         T["humOut"] = lag(T["humOut"], hum_goal, 120 if on["hum"] else 500, dt)
         T["gasEnd"] = lag(T["gasEnd"], (46.0 if self.fault("overtemp_gas") else tg) if on["tube"] else AMB + 6, 100 if on["tube"] else 400, dt)
-        want = self.flowSet if on["pump"] else 0.0
+        want = self.flow_want() if on["pump"] else 0.0
         self.flow = lag(self.flow, want, 3, dt)
         if self.flow > 0.5:      # 循环着:腹腔温度慢慢靠近送回来的气体温度
             tau = 900 * 10.0 / max(self.flow, 1.0)
@@ -197,12 +206,16 @@ class Device:
         p = 0.0 if not inflated else 19.5 if self.fault("press_high") else 4.5 if self.fault("press_low") else 12.0
         self.pumpRun = self.pumpRun + dt if on["pump"] else 0.0
         self.press = lag(self.press, p, 8, dt)
+        # 雾化气压大致和流量的平方成正比:12 L/min 时约 65 kPa
+        np = 0.45 * self.flow ** 2 * (0.3 if self.fault("noz_low") else 1.0)
+        if self.fault("noz_block") and on["pump"]: np = 185.0
+        self.nozP = lag(self.nozP, np, 1.5, dt)
 
     def read(self):
         n = lambda: random.gauss(0, 0.03)
         T = self.T
         self.rd = {"syr1": T["syr"] + n(), "syr2": T["syr"] - 0.1 + n() + (2.5 if self.fault("sensor") else 0),
-                   "line1": T["line"] + n(), "line2": T["line"] - 0.1 + n(), "lineOut": T["lineOut"] + n(),
+                   "noz1": T["noz"] + n(), "noz2": T["noz"] - 0.1 + n(),
                    "humPlate": T["humPlate"] + n(), "humOut": T["humOut"] + n(),
                    "gasEnd": None if self.fault("sensor_open") else T["gasEnd"] + n(),
                    "ip1": T["ip1"] + self.ipOff * max(0.0, 44.2 - T["ip1"]) + n(), "ip2": T["ip2"] + n()}
@@ -210,11 +223,11 @@ class Device:
     def alarms(self, dt):
         r, al, tg = self.rd, self.al, self.target
         ge = lambda k, lim: r.get(k) is not None and r[k] >= lim
-        if any(ge(k, 43.8) for k in ("syr1", "syr2", "line1", "line2")): al.add("OVERTEMP_DRUG")
+        if any(ge(k, 43.8) for k in ("syr1", "syr2", "noz1", "noz2")): al.add("OVERTEMP_DRUG")
         if ge("gasEnd", 44.5) or ge("humOut", 46.0) or ge("humPlate", 88.0): al.add("OVERTEMP_GAS")
         if ge("ip1", 43.5) or ge("ip2", 43.5): al.add("IP_HIGH")
         # 成对传感器不一致,或者控制用传感器断线:关掉对应的通路
-        for ch, a, b in (("syr", "syr1", "syr2"), ("line", "line1", "line2")):
+        for ch, a, b in (("syr", "syr1", "syr2"), ("noz", "noz1", "noz2")):
             bad = r[a] is not None and r[b] is not None and abs(r[a] - r[b]) > 1.5
             if self.held("pair_" + ch, bad, dt) >= 10 or r[a] is None or r[b] is None:
                 al.add("SENSOR"); self.sensorOff.add(ch)
@@ -224,7 +237,9 @@ class Device:
         if self.held("press_low", self.on["pump"] and self.press <= 6.0, dt) >= 5: al.add("PRESS_LOW")
         water = self.pumpRun >= 120 and self.on["hum"] and ge("humPlate", 75.0) and r["humOut"] is not None and r["humOut"] < tg - 3.0
         if self.held("water", water, dt) >= 120: al.add("WATER_LOW")
-        al.add("LID") if self.fault("lid") else al.discard("LID")
+        if self.held("noz_block", self.nozP >= 150.0, dt) >= 3: al.add("NOZ_BLOCK")
+        weak = self.ph == "NEBULIZE" and self.pumpRun >= 10 and self.nozP < 30.0
+        al.add("NOZ_LOW") if self.held("noz_low", weak, dt) >= 10 else al.discard("NOZ_LOW")
         al.add("PREHEAT_SLOW") if self.ph == "PREHEAT" and self.phSec > 3600 else al.discard("PREHEAT_SLOW")
         m = self.ip_mean()
         low = self.ph == "EXPOSE" and m is not None and m < tg - 2.0
@@ -254,16 +269,17 @@ class Device:
         self.outputs()      # 报警或阶段刚变,输出立刻跟着变
         T, tg, on = self.T, self.target, self.on
         pid = lambda ch, cur, sp, hold: int(max(0, min(100, hold + (sp - cur) * 60))) if on[ch] else 0
-        self.duty = {"syr": pid("syr", T["syr"], tg, 30), "line": pid("line", T["line"], tg, 20),
+        self.duty = {"syr": pid("syr", T["syr"], tg, 30), "noz": pid("noz", T["noz"], tg, 20),
                      "hum": pid("hum", T["humOut"], tg + 1, 55), "tube": pid("tube", T["gasEnd"], tg, 35),
-                     "pump": int(round(self.flowSet / 15.0 * 100)) if on["pump"] else 0}
+                     "pump": int(round(self.flow_want() / 15.0 * 100)) if on["pump"] else 0}
 
     def telemetry(self):
         r1 = lambda v: None if v is None else round(v, 1)
         left = max(0, int(self.exposeMin * 60 - self.phSec)) if self.ph == "EXPOSE" else -1
-        return {"id": self.id, "ph": self.ph, "target": self.target, "exposeMin": self.exposeMin, "flowSet": self.flowSet,
+        return {"id": self.id, "ph": self.ph, "target": self.target, "exposeMin": self.exposeMin, "flowSet": self.flowSet, "nebFlow": self.nebFlow,
                 "circInExpose": self.circ, "t": {k: r1(v) for k, v in self.rd.items()},
-                "press": round(max(0.0, self.press + random.gauss(0, 0.15)), 1), "flow": round(max(0.0, self.flow + (random.gauss(0, 0.1) if self.flow > 0.3 else 0)), 1),
+                "press": round(max(0.0, self.press + random.gauss(0, 0.15)), 1),
+                "nozP": round(max(0.0, self.nozP + (random.gauss(0, 0.5) if self.nozP > 1 else 0)), 1), "flow": round(max(0.0, self.flow + (random.gauss(0, 0.1) if self.flow > 0.3 else 0)), 1),
                 "duty": self.duty, "phSec": int(self.phSec), "exposeLeft": left, "al": sorted(self.al), "muted": self.muteLeft > 0}
 
 

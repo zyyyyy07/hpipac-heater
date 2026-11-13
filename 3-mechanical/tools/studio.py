@@ -26,8 +26,7 @@ def mesh(name, params):
         hi = [max(hi[0], bb.xmax), max(hi[1], bb.ymax), max(hi[2], bb.zmax)]
         vol += shape.Volume(); valid = valid and shape.isValid()
         parts.append({"name": pname, "kind": kind, "v": [round(c, 3) for v in verts for c in (v.x, v.y, v.z)], "t": [i for t in tris for i in t]})
-    info = {"groove_len": round(b.groove_length()), "bore": [round(2 * b.GROOVE_R, 2), round(2 * b.GROOVE_DEPTH, 2)],
-            "screws": b.SCREWS, "dowels": b.DOWELS, "ntc_x": b.NTC_X, "ntc_z": b.NTC_Z, "run_y": b.RUN_Y}
+    info = {"gas_area": b.GAS_AREA}
     return {"parts": parts, "size": [round(h - l, 1) for l, h in zip(lo, hi)], "center": [(l + h) / 2 for l, h in zip(lo, hi)],
             "volume": round(vol / 1000, 1), "valid": valid, "how": how, "title": title, "multi": len(items) > 1, "info": info}
 

@@ -2,15 +2,15 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>主机面板模拟 · hPIPAC 加热系统</title>
 <style>
-:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--line:#2a444d;--acc:#49b8cc;--crit:#f0604f;--warn:#e7ab2f}
+:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--rule:#2a444d;--acc:#49b8cc;--crit:#f0604f;--warn:#e7ab2f}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;padding:16px}
 header{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px}h1{font-size:22px;margin:0}.sp{flex:1}
-a{color:var(--acc)}select{font:inherit;background:#0b1418;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:5px 8px}
+a{color:var(--acc)}select{font:inherit;background:#0b1418;color:var(--fg);border:1px solid var(--rule);border-radius:5px;padding:5px 8px}
 .wrap{display:grid;grid-template-columns:minmax(0,760px) minmax(260px,1fr);gap:20px;align-items:start}
 @media (max-width:980px){.wrap{grid-template-columns:1fr}}
 /* 盒盖:205 × 145 mm;屏幕窗口 155 × 87 mm。各元件的位置按盖板开孔的比例摆 */
-.lid{position:relative;width:100%;aspect-ratio:205/145;background:#3d8a9c;border-radius:3.9%/5.5%;box-shadow:inset 0 0 0 2px #2c6b7a,0 6px 20px rgba(0,0,0,.4)}
-.lid>*{position:absolute;transform:translate(-50%,-50%)}
+.cover{position:relative;width:100%;aspect-ratio:205/145;background:#3d8a9c;border-radius:3.9%/5.5%;box-shadow:inset 0 0 0 2px #2c6b7a,0 6px 20px rgba(0,0,0,.4)}
+.cover>*{position:absolute;transform:translate(-50%,-50%)}
 .screw{width:2%;aspect-ratio:1;border-radius:50%;background:#20353b;box-shadow:inset 0 0 0 1px #0d181b}
 .scr{width:75.6%;aspect-ratio:155/87;background:#000;box-shadow:0 0 0 3px #0c1417;overflow:hidden}
 .scr iframe{border:0;width:800px;height:480px;transform-origin:0 0;display:block}
@@ -20,7 +20,7 @@ a{color:var(--acc)}select{font:inherit;background:#0b1418;color:var(--fg);border
 .btn:active{filter:brightness(.8)}.btn.stop{width:7.8%;background:#d8473a;color:#fff}.btn.mute{width:5.9%;background:#d9dee0;color:#223}
 .buz{width:5.9%;aspect-ratio:1;border-radius:50%;background:repeating-linear-gradient(90deg,#16262b 0 2px,#2c4047 2px 5px);box-shadow:inset 0 0 0 2px #0d181b}
 .buz.on{box-shadow:inset 0 0 0 2px #0d181b,0 0 0 4px rgba(255,197,49,.55)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:14px}
 h2{font-size:15px;margin:0 0 8px;color:var(--acc)}table{border-collapse:collapse;width:100%;font-size:14.5px}td{padding:3px 8px 3px 0;vertical-align:top}
 td:first-child{white-space:nowrap;color:#bfe6f2}.dim{color:var(--dim);font-size:14px}
 #msg{color:var(--warn);min-height:1.6em;font-weight:700}
@@ -29,7 +29,7 @@ td:first-child{white-space:nowrap;color:#bfe6f2}.dim{color:var(--dim);font-size:
 <a id="con" href="/console">手术控制台</a></header>
 <div class="wrap">
   <div>
-    <div class="lid" aria-label="主机盖板">
+    <div class="cover" aria-label="主机盖板">
       <span class="screw" style="left:4.4%;top:6.2%"></span><span class="screw" style="left:95.6%;top:6.2%"></span>
       <span class="screw" style="left:4.4%;top:93.8%"></span><span class="screw" style="left:95.6%;top:93.8%"></span>
       <div class="scr" id="scr" style="left:50%;top:42.1%"><iframe id="fr" title="主机触摸屏"></iframe></div>
@@ -45,8 +45,8 @@ td:first-child{white-space:nowrap;color:#bfe6f2}.dim{color:var(--dim);font-size:
   <div style="display:grid;gap:14px">
     <div class="card"><h2>当前状态</h2><table id="exp"></table></div>
     <div class="card"><h2>指示灯和蜂鸣器</h2><table>
-      <tr><td>红灯快闪</td><td>有高级报警:过温、腹腔温度过高、传感器故障、压力过高或过低。相关的加热和循环泵已经自动关掉。</td></tr>
-      <tr><td>黄灯常亮</td><td>有中级报警:加湿罐缺水、保温板没合上、预热太久、腹腔温度偏低、暴露计时到。</td></tr>
+      <tr><td>红灯快闪</td><td>有高级报警:过温、腹腔温度过高、传感器故障、腹腔压力过高或过低、喷头堵塞。相关的加热和循环泵已经自动关掉。</td></tr>
+      <tr><td>黄灯常亮</td><td>有中级报警:加湿罐缺水、雾化气压不足、预热太久、腹腔温度偏低、暴露计时到。</td></tr>
       <tr><td>绿灯慢闪</td><td>预热中。</td></tr>
       <tr><td>绿灯常亮</td><td>就绪、喷雾、暴露阶段。</td></tr>
       <tr><td>蜂鸣器</td><td>高级报警急促响,中级报警每 2 秒短响一声,消音后 2 分钟不响。这里只用光圈示意,不出声。</td></tr></table></div>
@@ -64,9 +64,9 @@ function explain(d) {
   const L = d.last || {}, t = L.t || {}, al = L.al || [], m = ipMean(t);
   const rows = [['阶段', (PH_CN[L.ph] || L.ph || '—') + (d.online ? '' : '(设备离线)')],
     ['腹腔温度', '平均 ' + fx(m) + ' ℃,目标 ' + fx(L.target) + ' ℃'],
-    ['药液', '注射筒 ' + fx(t.syr1) + ' ℃,高压管 ' + fx(t.line1) + ' ℃'],
-    ['气体', '病人端 ' + fx(t.gasEnd) + ' ℃,加湿罐出口 ' + fx(t.humOut) + ' ℃'],
-    ['压力和流量', fx(L.press) + ' mmHg,' + fx(L.flow) + ' L/min'],
+    ['药液', '注射筒 ' + fx(t.syr1) + ' ℃,喷头歧管 ' + fx(t.noz1) + ' ℃'],
+    ['气体', '喷头端 ' + fx(t.gasEnd) + ' ℃,加湿罐出口 ' + fx(t.humOut) + ' ℃'],
+    ['压力和流量', '腹腔 ' + fx(L.press) + ' mmHg,雾化气 ' + fx(L.nozP, 0) + ' kPa,' + fx(L.flow) + ' L/min'],
     ['报警', al.length ? al.map(a => alarmInfo(a).cn).join('、') : '无'],
     ['蜂鸣器', L.muted ? '已消音' : al.length ? '在响' : '不响']];
   const tb = $('#exp'); tb.textContent = '';

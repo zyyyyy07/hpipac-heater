@@ -21,7 +21,7 @@
 #define PWM_MAX 1023                      // 10 位
 #define PWM_CH_PUMP 4                     // 加热四路用 LEDC 通道 0–3(1 kHz),泵用通道 4(20 kHz)
 
-static const uint8_t HEAT_PIN[H_COUNT] = {PIN_HEAT_SYR, PIN_HEAT_LINE, PIN_HEAT_HUM, PIN_HEAT_TUBE};
+static const uint8_t HEAT_PIN[H_COUNT] = {PIN_HEAT_SYR, PIN_HEAT_NOZ, PIN_HEAT_HUM, PIN_HEAT_TUBE};
 
 Adafruit_ADS1115 ads[3];
 static const uint8_t ADS_ADDR[3] = {ADS_ADDR_1, ADS_ADDR_2, ADS_ADDR_3};
@@ -66,13 +66,12 @@ void readSensors() {
   bool refOk = vref >= 3.0f && vref <= 3.6f;               // 基准不对:全部温度按读不到处理
   auto T = [&](int chip, int ch, float off) { return refOk ? ntcTemp(adsVolts(chip, ch), vref, off) : NAN; };
   sens.syr1     = T(0, 0, OFFSET_SYR1);
-  sens.line1    = T(0, 1, OFFSET_LINE1);
+  sens.noz1    = T(0, 1, OFFSET_NOZ1);
   sens.humOut   = T(0, 2, OFFSET_HUMOUT);
   sens.syr2     = T(1, 0, OFFSET_SYR2);
-  sens.line2    = T(1, 1, OFFSET_LINE2);
+  sens.noz2    = T(1, 1, OFFSET_NOZ2);
   sens.humPlate = T(1, 2, OFFSET_HUMPLATE);
   sens.gasEnd   = T(1, 3, OFFSET_GASEND);
-  sens.lineOut  = T(2, 0, OFFSET_LINEOUT);
 #if HAS_IP_PROBES
   sens.ip1 = T(2, 1, OFFSET_IP1);
   sens.ip2 = T(2, 2, OFFSET_IP2);
@@ -87,10 +86,12 @@ void readSensors() {
 #else
   sens.press = NAN; sens.pressFitted = false;
 #endif
-#if HAS_LID_SWITCH
-  sens.lidClosed = digitalRead(PIN_LID) == LOW;
+#if HAS_NOZ_PRESSURE
+  float vn = adsVolts(2, 0) * PRESS_DIVIDER;               // 雾化气压:同样的分压和电压范围,量程 0–200 kPa
+  sens.nozP = (vn >= 0.25f && vn <= 4.75f) ? (vn - PRESS_V_ZERO) / PRESS_V_SPAN * NOZP_RANGE + OFFSET_NOZP : NAN;
+  sens.nozPFitted = true;
 #else
-  sens.lidClosed = true;
+  sens.nozP = NAN; sens.nozPFitted = false;
 #endif
 }
 
@@ -124,12 +125,14 @@ void buildSnapshot(uint32_t now) {
   JsonDocument d;
   d["id"] = DEVICE_ID; d["ph"] = PHASE_NAME[core.ph];
   d["target"] = round(core.target * 10) / 10.0; d["exposeMin"] = core.exposeMin;
-  d["flowSet"] = round(core.flowSet * 10) / 10.0; d["circInExpose"] = core.circInExpose;
+  d["flowSet"] = round(core.flowSet * 10) / 10.0;
+  d["nebFlow"] = round(core.nebFlow * 10) / 10.0; d["circInExpose"] = core.circInExpose;
   JsonObject t = d["t"].to<JsonObject>();
-  putT(t, "syr1", sens.syr1); putT(t, "syr2", sens.syr2); putT(t, "line1", sens.line1); putT(t, "line2", sens.line2);
-  putT(t, "lineOut", sens.lineOut); putT(t, "humPlate", sens.humPlate); putT(t, "humOut", sens.humOut);
+  putT(t, "syr1", sens.syr1); putT(t, "syr2", sens.syr2); putT(t, "noz1", sens.noz1); putT(t, "noz2", sens.noz2);
+  putT(t, "humPlate", sens.humPlate); putT(t, "humOut", sens.humOut);
   putT(t, "gasEnd", sens.gasEnd); putT(t, "ip1", sens.ip1); putT(t, "ip2", sens.ip2);
   if (isnan(sens.press)) d["press"] = nullptr; else d["press"] = round(sens.press * 10) / 10.0;
+  if (isnan(sens.nozP)) d["nozP"] = nullptr; else d["nozP"] = round(sens.nozP * 10) / 10.0;
   d["flow"] = round(flowEstimate(ctrl.pumpDuty) * 10) / 10.0;      // 按占空比估算,不是实测
   JsonObject du = d["duty"].to<JsonObject>();
   for (int h = 0; h < H_COUNT; h++) du[HEATER_NAME[h]] = (int)lroundf(ctrl.duty[h] * 100);
@@ -175,20 +178,20 @@ void help() {
   Serial.println(F(
     "status                      看一次全部读数和状态\n"
     "log 1|0                     每秒一行 CSV\n"
-    "heat <syr|line|hum|tube> <占空比%>   手动加热,只在 IDLE;过温保护照常;0 = 关;10 分钟自动关\n"
+    "heat <syr|noz|hum|tube> <占空比%>    手动加热,只在 IDLE;过温保护照常;0 = 关;10 分钟自动关\n"
     "pump <占空比%>              手动转泵,只在 IDLE;0 = 关\n"
     "preheat | ready | nebulize | expose | evac | finish | abort | ack | mute\n"
-    "target <37.0-43.0> | flow <0-15> | exposeMin <1-60> | circInExpose <1|0>"));
+    "target <37.0-43.0> | flow <0-15> | nebflow <5-15> | exposeMin <1-60> | circInExpose <1|0>"));
 }
 void status() {
   uint32_t now = millis();
-  Serial.printf("ph=%s phSec=%lu exposeLeft=%ld target=%.1f flowSet=%.1f exposeMin=%d circInExpose=%d\n",
+  Serial.printf("ph=%s phSec=%lu exposeLeft=%ld target=%.1f flowSet=%.1f nebFlow=%.1f exposeMin=%d circInExpose=%d\n",
                 PHASE_NAME[core.ph], (unsigned long)phaseSec(core, now), (long)exposeLeftSec(core, now),
-                core.target, core.flowSet, core.exposeMin, core.circInExpose);
-  Serial.printf("syr=%.2f/%.2f line=%.2f/%.2f lineOut=%.2f humPlate=%.2f humOut=%.2f gasEnd=%.2f ip=%.2f/%.2f press=%.1f lid=%d\n",
-                sens.syr1, sens.syr2, sens.line1, sens.line2, sens.lineOut, sens.humPlate, sens.humOut, sens.gasEnd,
-                sens.ip1, sens.ip2, sens.press, sens.lidClosed);
-  Serial.printf("set=%.1f/%.1f/%.1f/%.1f duty%%=%.0f/%.0f/%.0f/%.0f pump%%=%.0f flow~%.1f (syr/line/hum/tube)\n",
+                core.target, core.flowSet, core.nebFlow, core.exposeMin, core.circInExpose);
+  Serial.printf("syr=%.2f/%.2f noz=%.2f/%.2f humPlate=%.2f humOut=%.2f gasEnd=%.2f ip=%.2f/%.2f press=%.1f nozP=%.1f\n",
+                sens.syr1, sens.syr2, sens.noz1, sens.noz2, sens.humPlate, sens.humOut, sens.gasEnd,
+                sens.ip1, sens.ip2, sens.press, sens.nozP);
+  Serial.printf("set=%.1f/%.1f/%.1f/%.1f duty%%=%.0f/%.0f/%.0f/%.0f pump%%=%.0f flow~%.1f (syr/noz/hum/tube)\n",
                 core.out.set[0], core.out.set[1], core.out.set[2], core.out.set[3],
                 ctrl.duty[0] * 100, ctrl.duty[1] * 100, ctrl.duty[2] * 100, ctrl.duty[3] * 100,
                 ctrl.pumpDuty * 100, flowEstimate(ctrl.pumpDuty));
@@ -207,7 +210,7 @@ void serialCmd(String s) {
   else if (!strcmp(w, "status")) status();
   else if (!strcmp(w, "log")) {
     logCsv = v > 0;
-    if (logCsv) Serial.println("ms,ph,syr1,syr2,line1,line2,lineOut,humPlate,humOut,gasEnd,ip1,ip2,press,duty_syr,duty_line,duty_hum,duty_tube,duty_pump,alarms");
+    if (logCsv) Serial.println("ms,ph,syr1,syr2,noz1,noz2,humPlate,humOut,gasEnd,ip1,ip2,press,nozP,duty_syr,duty_noz,duty_hum,duty_tube,duty_pump,alarms");
   }
   else if (!strcmp(w, "heat")) {
     int h = -1; for (int i = 0; i < H_COUNT; i++) if (!strcmp(a1, HEATER_NAME[i])) h = i;
@@ -218,6 +221,7 @@ void serialCmd(String s) {
     bool ok = cmdManualPump(core, now, v / 100.0f);
     Serial.println(ok ? "OK pump" : "ERR pump 拒绝(只在 IDLE、无高级报警、0-100)");
   }
+  else if (!strcmp(w, "nebflow") || !strcmp(w, "nebFlow")) runCmd("nebFlow", v, "serial");
   else if (!strcmp(w, "preheat") || !strcmp(w, "ready") || !strcmp(w, "nebulize") || !strcmp(w, "expose") ||
            !strcmp(w, "evac") || !strcmp(w, "finish") || !strcmp(w, "abort") || !strcmp(w, "ack") || !strcmp(w, "mute") ||
            !strcmp(w, "target") || !strcmp(w, "flow") || !strcmp(w, "exposeMin") || !strcmp(w, "circInExpose"))
@@ -237,7 +241,7 @@ void setup() {
   PWM_ATTACH(PIN_PUMP, PWM_CH_PUMP, 20000, 10);
   outputsSafe();
   for (int p : {PIN_BUZZER, PIN_LED_R, PIN_LED_Y, PIN_LED_G}) { pinMode(p, OUTPUT); digitalWrite(p, LOW); }
-  pinMode(PIN_BTN_ABORT, INPUT_PULLUP); pinMode(PIN_BTN_MUTE, INPUT_PULLUP); pinMode(PIN_LID, INPUT);
+  pinMode(PIN_BTN_ABORT, INPUT_PULLUP); pinMode(PIN_BTN_MUTE, INPUT_PULLUP);
 
   Serial.begin(115200);
   Wire.begin(PIN_SDA, PIN_SCL); Wire.setClock(400000);
@@ -291,9 +295,9 @@ void loop() {
 
   if (now - t1000 >= 1000) {
     t1000 = now;
-    if (logCsv) Serial.printf("%lu,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.1f,%.0f,%.0f,%.0f,%.0f,%.0f,0x%03X\n",
-                              (unsigned long)now, PHASE_NAME[core.ph], sens.syr1, sens.syr2, sens.line1, sens.line2, sens.lineOut,
-                              sens.humPlate, sens.humOut, sens.gasEnd, sens.ip1, sens.ip2, sens.press,
+    if (logCsv) Serial.printf("%lu,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.1f,%.1f,%.0f,%.0f,%.0f,%.0f,%.0f,0x%03X\n",
+                              (unsigned long)now, PHASE_NAME[core.ph], sens.syr1, sens.syr2, sens.noz1, sens.noz2,
+                              sens.humPlate, sens.humOut, sens.gasEnd, sens.ip1, sens.ip2, sens.press, sens.nozP,
                               ctrl.duty[0] * 100, ctrl.duty[1] * 100, ctrl.duty[2] * 100, ctrl.duty[3] * 100, ctrl.pumpDuty * 100, core.alarms);
   }
 }

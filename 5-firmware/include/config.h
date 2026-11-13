@@ -13,7 +13,7 @@
 #define PIN_SDA         21   // I2C:三片 ADS1115(0x48、0x49、0x4A)
 #define PIN_SCL         22
 #define PIN_HEAT_SYR    25   // 注射筒加热套 MOS(低边 PWM,高电平导通)
-#define PIN_HEAT_LINE   26   // 高压管保温板 MOS
+#define PIN_HEAT_NOZ    26   // 喷头歧管加热 MOS
 #define PIN_HEAT_HUM    27   // 加湿加热底座 MOS
 #define PIN_HEAT_TUBE   17   // 加热输气管 MOS
 #define PIN_HEAT_EN     33   // 加热总开关 MOS(串在四路加热的电源上,高电平接通)
@@ -24,21 +24,21 @@
 #define PIN_LED_G       19
 #define PIN_BTN_ABORT   32   // 暂停(中止)按键,按下接地
 #define PIN_BTN_MUTE    13   // 消音按键,按下接地
-#define PIN_LID         35   // 高压管保温板合盖干簧管,合盖接地,外接 10k 上拉到 3.3V(GPIO35 没有内部上拉)
 // 五只 MOS 的栅极和 PIN_HEAT_EN 都要各接一只 10k 下拉电阻:ESP32 复位或没上电时输出保持关断。
 
 // ---- ADS1115 通道分配 ----
-// 十只 NTC(10k B3950)都是同一种分压:3.3V — NTC — 测量点 — 10k 固定电阻 — GND。
+// 九只 NTC(10k B3950)都是同一种分压:3.3V — NTC — 测量点 — 10k 固定电阻 — GND。
 // 比例测量:U1 的 A3 直接接 3.3V 电源,读出的电压作为全部 NTC 的基准,电源波动不影响温度读数。
 // 每一路的“控制”和“保护”两只传感器故意放在不同的芯片上,一片 ADS1115 出错时两只读数会对不上。
 //
-// | 芯片 | 地址 | ADDR 脚接 | A0      | A1    | A2       | A3              |
-// | ---- | ---- | --------- | ------- | ----- | -------- | --------------- |
-// | U1   | 0x48 | GND       | syr1    | line1 | humOut   | 3.3V 基准       |
-// | U2   | 0x49 | 3.3V      | syr2    | line2 | humPlate | gasEnd          |
-// | U3   | 0x4A | SDA       | lineOut | ip1   | ip2      | press(经分压) |
+// | 芯片 | 地址 | ADDR 脚接 | A0           | A1   | A2       | A3              |
+// | ---- | ---- | --------- | ------------ | ---- | -------- | --------------- |
+// | U1   | 0x48 | GND       | syr1         | noz1 | humOut   | 3.3V 基准       |
+// | U2   | 0x49 | 3.3V      | syr2         | noz2 | humPlate | gasEnd          |
+// | U3   | 0x4A | SDA       | nozP(经分压) | ip1  | ip2      | press(经分压) |
 //
-// 压力传感器:0–50 mmHg,5 V 供电,输出 0.5–4.5 V。输出经 10k(上)/20k(下)分压成 0.33–3.0 V 后接 U3 的 A3。
+// 腹腔压力传感器:0–50 mmHg,5 V 供电,输出 0.5–4.5 V。输出经 10k(上)/20k(下)分压成 0.33–3.0 V 后接 U3 的 A3。
+// 雾化气压传感器(喷头歧管处):0–200 kPa 表压,同样 5 V 供电、0.5–4.5 V 输出,经同样的 10k/20k 分压后接 U3 的 A0。
 // 选 ADS1115 而不是 ESP32 自带 ADC:自带 ADC 非线性大,而且 Wi-Fi 工作时 ADC2 不能用。
 // 传感器输出与它的 5 V 供电成比例,固件没有测 5 V,5 V 的误差会按比例带进压力读数。
 #define ADS_ADDR_1      0x48
@@ -46,9 +46,9 @@
 #define ADS_ADDR_3      0x4A
 
 // ---- 选装件 ----
-#define HAS_PRESSURE    1    // 0 = 没装压力传感器:press 上报 null,压力报警不起作用
+#define HAS_PRESSURE    1    // 0 = 没装腹腔压力传感器:press 上报 null,压力报警不起作用
+#define HAS_NOZ_PRESSURE 1   // 0 = 没装雾化气压传感器:nozP 上报 null,NOZ_BLOCK、NOZ_LOW 不起作用
 #define HAS_IP_PROBES   1    // 0 = 没装腹腔温度探头:ip1/ip2 上报 null,READY 只能用 ready 命令手动确认
-#define HAS_LID_SWITCH  1    // 0 = 没装合盖开关:按“已合盖”处理,LID 报警不起作用
 
 // ---- 温度传感器 ----
 #define NTC_R0          10000.0f
@@ -56,9 +56,8 @@
 #define NTC_R_FIXED     10000.0f
 #define OFFSET_SYR1     0.0f   // 校准后填入(℃)
 #define OFFSET_SYR2     0.0f
-#define OFFSET_LINE1    0.0f
-#define OFFSET_LINE2    0.0f
-#define OFFSET_LINEOUT  0.0f
+#define OFFSET_NOZ1    0.0f
+#define OFFSET_NOZ2    0.0f
 #define OFFSET_HUMPLATE 0.0f
 #define OFFSET_HUMOUT   0.0f
 #define OFFSET_GASEND   0.0f
@@ -71,6 +70,8 @@
 #define PRESS_V_SPAN    4.0f   // 满量程电压跨度(0.5–4.5 V)
 #define PRESS_RANGE     50.0f  // 满量程 mmHg
 #define OFFSET_PRESS    0.0f   // 校准后填入(mmHg)
+#define NOZP_RANGE      200.0f // 雾化气压传感器满量程 kPa(分压和电压范围与上面相同)
+#define OFFSET_NOZP     0.0f   // 校准后填入(kPa)
 
 // ---- 循环泵 ----
 // 没有接转速反馈。流量是按占空比估算的:flow = 占空比 × PUMP_LPM_AT_FULL。
@@ -78,14 +79,17 @@
 #define PUMP_LPM_AT_FULL 15.0f
 #define FLOW_MAX         15.0f
 #define FLOW_DEFAULT     10.0f
+#define NEB_FLOW_MIN      5.0f   // 喷雾阶段的雾化气流量范围和默认值
+#define NEB_FLOW_MAX     15.0f
+#define NEB_FLOW_DEFAULT 12.0f
 
 // ---- 目标温度与上限(与接口约定一致,不要随意改)----
 #define TARGET_MIN      37.0f
 #define TARGET_MAX      43.0f
 #define TARGET_DEFAULT  42.0f
-#define DRUG_SET_MAX    43.0f  // 药液通路(SYR、LINE)设定值和加热面的硬上限
+#define DRUG_SET_MAX    43.0f  // 药液通路(SYR、NOZ)设定值和加热面的硬上限
 #define DRUG_TRIP       43.8f  // OVERTEMP_DRUG
-#define GAS_END_MAX     43.5f  // 病人端气温上限:到这个值 TUBE 输出归零
+#define GAS_END_MAX     43.5f  // 喷头端气温上限:到这个值 TUBE 输出归零
 #define GAS_END_TRIP    44.5f  // OVERTEMP_GAS
 #define HUM_OUT_MAX     45.0f  // 加湿罐出口气温上限:到这个值 HUM 输出归零
 #define HUM_OUT_TRIP    46.0f  // OVERTEMP_GAS
@@ -110,13 +114,18 @@
 #define WATER_PLATE_C   75.0f
 #define WATER_DELTA_C   3.0f
 #define WATER_MS        120000
+#define NOZ_BLOCK_KPA   150.0f   // 喷嘴堵塞或输气管打折
+#define NOZ_BLOCK_MS    3000
+#define NOZ_LOW_KPA     30.0f    // 雾化气压不够
+#define NOZ_LOW_MS      10000
+#define NOZ_PUMP_MS     10000    // NEBULIZE 中泵转满这么久才开始判 NOZ_LOW
 #define PREHEAT_SLOW_MS 3600000
 #define IP_LOW_DELTA_C  2.0f
 #define IP_LOW_MS       300000
 #define MUTE_MS         120000
 
 // ---- 阶段 ----
-#define READY_BAND_C     0.5f    // SYR、LINE 到温判定:目标 ±0.5 ℃
+#define READY_BAND_C     0.5f    // SYR、NOZ 到温判定:目标 ±0.5 ℃
 #define READY_GAS_DELTA  1.0f    // gasEnd ≥ 目标 − 1 ℃
 #define READY_IP_DELTA   1.0f    // 腹腔平均温度 ≥ 目标 − 1 ℃
 #define READY_LOST_MS    60000   // READY 条件失去这么久掉回 PREHEAT
@@ -128,14 +137,14 @@
 #define CONTROL_DT      0.2f     // 控制周期,秒
 #define SYR_KP          0.35f
 #define SYR_KI          0.012f
-#define LINE_KP         0.35f
-#define LINE_KI         0.012f
+#define NOZ_KP         0.35f
+#define NOZ_KI         0.012f
 #define HUM_KP          0.20f
 #define HUM_KI          0.004f
 #define TUBE_KP         0.30f
 #define TUBE_KI         0.010f
 #define SYR_DUTY_MAX    1.0f     // 电源电压高于加热件额定电压时调低
-#define LINE_DUTY_MAX   1.0f
+#define NOZ_DUTY_MAX   1.0f
 #define HUM_DUTY_MAX    1.0f
 #define TUBE_DUTY_MAX   1.0f
 

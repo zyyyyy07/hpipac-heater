@@ -15,18 +15,12 @@ PARAMS_FILE = os.path.join(HERE, "params.json")
 
 # (键, 名称, 默认值, 最小, 最大, 步长, 分组)
 PARAMS = [
-    ("PL", "铝板长", 200.0, 120, 300, 1, "高压管保温板"),
-    ("PW", "铝板宽", 76.0, 50, 120, 1, "高压管保温板"),
-    ("PT", "铝板厚", 6.0, 5, 10, 0.5, "高压管保温板"),
-    ("GROOVE_R", "槽半径(= 高压管外径的一半)", 2.0, 1.5, 3.5, 0.05, "高压管保温板"),
-    ("GROOVE_DEPTH", "单片槽深", 1.95, 1.2, 3.5, 0.05, "高压管保温板"),
-    ("BEND_R", "高压管转弯半径", 15.0, 8, 25, 0.5, "高压管保温板"),
-    ("S_WALL", "壁厚", 2.5, 1.6, 4, 0.1, "保温板外壳"),
-    ("S_FLOOR", "底厚", 2.0, 1.2, 4, 0.1, "保温板外壳"),
-    ("S_GAP", "铝板四周间隙", 1.5, 0.3, 4, 0.1, "保温板外壳"),
-    ("S_INSUL", "保温层厚", 3.0, 1, 10, 0.5, "保温板外壳"),
-    ("SYR_D", "注射筒外径", 50.0, 30, 75, 0.5, "注射筒加热套"),
-    ("SYR_L", "加热段长度", 120.0, 60, 200, 1, "注射筒加热套"),
+    ("NOZ_D", "喷头杆外径", 10.0, 8, 12, 0.5, "气助雾化喷头"),
+    ("NOZ_L", "喷头杆长度", 200.0, 120, 280, 5, "气助雾化喷头"),
+    ("NOZ_ORI", "喷口直径", 2.0, 1.8, 3.0, 0.05, "气助雾化喷头"),
+    ("CAP_OD", "药液毛细管外径", 1.6, 1.0, 2.0, 0.1, "气助雾化喷头"),
+    ("SYR_D", "注射筒外径", 30.0, 15, 75, 0.5, "注射筒加热套"),
+    ("SYR_L", "加热段长度", 100.0, 50, 200, 1, "注射筒加热套"),
     ("HUM_D", "加湿罐底面直径", 110.0, 80, 150, 0.5, "加湿加热底座"),
     ("BX", "盒长", 205.0, 120, 280, 1, "主控盒"),
     ("BY", "盒宽", 145.0, 80, 220, 1, "主控盒"),
@@ -44,14 +38,10 @@ def apply(params=None):
     """把参数写进模块全局变量,并算出由它们决定的孔位。尺寸不合理时抛 ValueError。"""
     p = dict(DEFAULTS)
     p.update({k: float(v) for k, v in (params or {}).items() if k in DEFAULTS})
-    if p["GROOVE_DEPTH"] > p["GROOVE_R"]:
-        raise ValueError("单片槽深不能大于槽半径")
-    if p["PW"] < 4 * p["BEND_R"] + 2 * p["GROOVE_R"] + 8:
-        raise ValueError(f"铝板太窄:三折槽在转弯半径 {p['BEND_R']:g} 下至少需要宽 {4 * p['BEND_R'] + 2 * p['GROOVE_R'] + 8:g}")
-    if p["PT"] - p["GROOVE_DEPTH"] < 3.2:
-        raise ValueError("铝板太薄:槽底下方放不下 Ø2.2 测温孔")
-    if p["PL"] < 2 * (p["BEND_R"] + 6) + 60:
-        raise ValueError("铝板太短")
+    if p["NOZ_ORI"] < p["CAP_OD"] + 0.25:
+        raise ValueError(f"喷口太小:要比毛细管外径至少大 0.25,否则环形气隙做不出来(当前毛细管 {p['CAP_OD']:g})")
+    if p["NOZ_ORI"] > p["NOZ_D"] - 5:
+        raise ValueError("喷口太大:超过了喷头杆内腔")
     if p["BX"] < p["SCR_W"] + 2 * SCR_BEZEL_X + 2 * p["BW"] + 5:
         raise ValueError(f"主控盒太短:放下这块触摸屏至少需要盒长 {p['SCR_W'] + 2 * SCR_BEZEL_X + 2 * p['BW'] + 5:g}")
     if p["BY"] < p["SCR_H"] + 2 * SCR_BEZEL_Y + p["BW"] + 26.5:
@@ -59,14 +49,7 @@ def apply(params=None):
     g = globals()
     g.update(p)
     g["P"] = p
-    g["RUN_Y"] = (p["PW"] / 2 + 2 * p["BEND_R"], p["PW"] / 2, p["PW"] / 2 - 2 * p["BEND_R"])   # 三条直槽中心
-    g["TURN_X"] = p["BEND_R"] + 6.0                                                             # 弯道圆心距板端
-    g["SCREWS"] = [(round(p["PL"] * 0.3), p["PW"] / 2 - p["BEND_R"]), (round(p["PL"] * 0.7), p["PW"] / 2 - p["BEND_R"]),
-                   (round(p["PL"] * 0.3), p["PW"] / 2 + p["BEND_R"]), (round(p["PL"] * 0.7), p["PW"] / 2 + p["BEND_R"])]  # 4 x M3
-    g["DOWELS"] = [(p["PL"] - 8, p["PW"] - 4), (8, 4)]                                           # 2 x Ø3
-    g["NTC_X"] = (p["PL"] / 2 - 3, p["PL"] / 2 + 7)                                              # 测温孔 Ø2.2 深 20
-    g["NTC_Z"] = round((p["PT"] - p["GROOVE_DEPTH"]) / 2, 2)                                     # 测温孔中心高度(槽底与背面正中)
-    g["S_DEPTH"] = p["S_INSUL"] + p["PT"]                                                       # 腔深;铝板面高出壳口一个加热片厚度
+    g["GAS_AREA"] = round(3.14159265 / 4 * (p["NOZ_ORI"] ** 2 - p["CAP_OD"] ** 2), 3)             # 环形气隙面积 mm2
     return p
 
 
@@ -80,65 +63,54 @@ def load_params():
 apply(load_params())
 
 
-def groove_length():
-    return (PL - TURN_X) * 2 + (PL - 2 * TURN_X) + 2 * 3.14159265 * BEND_R
+# ---------------- 气助加热雾化喷头 ----------------
+# 喷头轴线沿 Z,喷口在 z=0 朝下。药液走中心毛细管,温热的 CO2 走毛细管外面的环形通道,
+# 在喷口处高速气流把药液撕成雾(外混式双流体雾化)。
+TIP_H, MAN_X, MAN_Y, MAN_Z, MAN_IN = 14.0, 36.0, 30.0, 50.0, 20.0
 
 
-def groove_path(mirror):
-    """槽中心线。mirror=True 为上板(关于 y=PW/2 镜像),合模后与下板的槽对齐。"""
-    y = [PW - v for v in RUN_Y] if mirror else list(RUN_Y)
-    z = PT + (GROOVE_R - GROOVE_DEPTH)
-    xr, xl = PL - TURN_X, TURN_X
-    s = 1 if y[0] > y[1] else -1
-    return (cq.Workplane("XY").workplane(offset=z)
-            .moveTo(-1, y[0]).lineTo(xr, y[0])
-            .threePointArc((xr + BEND_R, y[0] - s * BEND_R), (xr, y[1]))
-            .lineTo(xl, y[1])
-            .threePointArc((xl - BEND_R, y[1] - s * BEND_R), (xl, y[2]))
-            .lineTo(PL + 1, y[2]))
+def nozzle_tip():
+    """喷嘴头:压进喷头杆下端。内腔收缩到喷口,毛细管从喷口中心伸出。"""
+    ro, rb, rj = NOZ_D / 2, NOZ_D / 2 - 2, NOZ_ORI / 2
+    pts = [(rj, 0), (ro - 1, 0), (ro, 1), (ro, 8), (ro - 1, 8), (ro - 1, TIP_H), (rb, TIP_H), (rb, 4), (rj, 1)]
+    return cq.Workplane("XZ").polyline(pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
 
 
-def plate(upper):
-    p = cq.Workplane("XY").box(PL, PW, PT, centered=False)
-    y0 = (PW - RUN_Y[0]) if upper else RUN_Y[0]
-    z = PT + (GROOVE_R - GROOVE_DEPTH)
-    profile = cq.Workplane("YZ").workplane(offset=-1).center(y0, z).circle(GROOVE_R)
-    p = p.cut(profile.sweep(groove_path(upper), transition="round"))
-    mir = (lambda pt: (pt[0], PW - pt[1])) if upper else (lambda pt: pt)
-    d = 3.4 if upper else 2.5          # 上板通孔,下板 M3 底孔(攻丝)
-    for pt in SCREWS:
-        x, yy = mir(pt)
-        p = p.cut(cq.Workplane("XY").center(x, yy).circle(d / 2).extrude(PT))
-    for pt in DOWELS:
-        x, yy = mir(pt)
-        p = p.cut(cq.Workplane("XY").center(x, yy).circle(1.5).extrude(PT))
-    for x in (NTC_X if not upper else NTC_X[:1]):          # 测温孔从 y=0 长边钻入
-        p = p.cut(cq.Workplane("XZ").center(x, NTC_Z).circle(1.1).extrude(-20))
-    return p
+def nozzle_spider():
+    """定心旋流片:放在喷嘴头内腔里,把毛细管定在正中;三条切向槽让气流带旋转,喷雾锥角更大。"""
+    r = NOZ_D / 2 - 2 - 0.03
+    d = cq.Workplane("XY").circle(r).circle(CAP_OD / 2 + 0.03).extrude(4)
+    for a in (0, 120, 240):
+        slot = cq.Workplane("XY").center(r / 2 + 0.6, CAP_OD / 2 + 1.0).rect(r, 1.0).extrude(4)
+        d = d.cut(slot.rotate((0, 0, 0), (0, 0, 1), a))
+    return d
 
 
-# ---------------- 高压管保温板外壳(3D 打印,上下各一) ----------------
-EAR_OUT = 9.0     # 绑带耳伸出壳体的长度
-def heater_shell(upper):
-    ox, oy = PL + 2 * (S_GAP + S_WALL), PW + 2 * (S_GAP + S_WALL)
-    s = (cq.Workplane("XY").box(ox, oy, S_FLOOR + S_DEPTH, centered=False)
-         .edges("|Z").fillet(6).faces("<Z").edges().fillet(min(1.5, S_FLOOR * 0.7)))
-    cav = cq.Workplane("XY").workplane(offset=S_FLOOR).center(S_WALL, S_WALL).rect(PL + 2 * S_GAP, PW + 2 * S_GAP, centered=False).extrude(S_DEPTH)
-    s = s.cut(cav)
-    off = S_GAP + S_WALL
-    ys = [PW - v for v in RUN_Y] if upper else list(RUN_Y)
-    top = S_FLOOR + S_DEPTH
-    for x, yy in ((-1, ys[0]), (ox - S_WALL - S_GAP - 1, ys[2])):   # 进出管缺口
-        s = s.cut(cq.Workplane("XY").workplane(offset=top - 2.2).center(x, yy + off - 2.6).rect(S_WALL + S_GAP + 2, 5.2, centered=False).extrude(3))
-    if not upper:                                                    # 下壳:长边中部 8 x 5 线缆出口
-        s = s.cut(cq.Workplane("XY").workplane(offset=S_FLOOR + 1).center(ox / 2 - 4, -1).rect(8, S_WALL + 2, centered=False).extrude(5))
-        for x in (ox * 0.25, ox * 0.75):                             # 另一条长边:两个绑带耳,穿 15 mm 绑带固定在手术台边
-            ear = cq.Workplane("XY").center(x, oy + EAR_OUT / 2 - 0.5).rect(24, EAR_OUT + 1).extrude(4).edges("|Z").fillet(2)
-            s = s.union(ear).cut(cq.Workplane("XY").center(x, oy + EAR_OUT / 2 + 0.5).rect(17, 3.5).extrude(4))
-    else:                                                            # 上壳:4 个螺丝过孔,拧 M3 夹紧螺丝用
-        for pt in SCREWS:
-            s = s.cut(cq.Workplane("XY").center(pt[0] + off, PW - pt[1] + off).circle(3.5).extrude(S_FLOOR))
-    return s
+def nozzle_manifold():
+    """歧管:喷头留在体外的部分。喷头杆从下面插入,气从侧面进,毛细管从顶上穿出,背面贴加热片。"""
+    m = cq.Workplane("XY").box(MAN_X, MAN_Y, MAN_Z, centered=(True, True, False)).edges("|Z").fillet(3)
+    m = m.cut(cq.Workplane("XY").circle(NOZ_D / 2 + 0.03).extrude(MAN_IN))                                   # 喷头杆插孔
+    m = m.cut(cq.Workplane("XY").workplane(offset=MAN_IN).circle(NOZ_D / 2 - 1).extrude(16))                 # 气室
+    m = m.cut(cq.Workplane("XY").workplane(offset=MAN_IN + 16).circle(CAP_OD / 2 + 0.05).extrude(MAN_Z))     # 毛细管穿孔
+    m = m.cut(cq.Workplane("XY").workplane(offset=MAN_Z - 6).circle(2.5).extrude(6))                         # 顶部 M6 压紧接头底孔
+    zg = MAN_IN + 8
+    m = m.cut(cq.Workplane("YZ").workplane(offset=MAN_X / 2).center(0, zg).circle(4.3).extrude(-10))        # +X 面进气口 G1/8
+    m = m.cut(cq.Workplane("YZ").workplane(offset=MAN_X / 2).center(0, zg).circle(3.0).extrude(-MAN_X / 2))
+    m = m.cut(cq.Workplane("YZ").workplane(offset=-MAN_X / 2).center(0, zg).circle(2.1).extrude(MAN_X / 2))  # -X 面测压口 M5
+    for x, z in ((-11, 10), (11, 40)):                                                                      # +Y 面 2 个测温孔
+        m = m.cut(cq.Workplane("XZ").workplane(offset=-MAN_Y / 2).center(x, z).circle(1.1).extrude(13))
+    return m
+
+
+def nozzle_parts():
+    """喷头装配:喷嘴头、旋流片、喷头杆、毛细管、歧管。"""
+    zt = 8.0                                             # 喷头杆下端
+    zm = zt + NOZ_L - MAN_IN                             # 歧管底面
+    shaft = cq.Workplane("XY").workplane(offset=zt).circle(NOZ_D / 2).circle(NOZ_D / 2 - 1).extrude(NOZ_L)
+    cap = cq.Workplane("XY").workplane(offset=-0.5).circle(CAP_OD / 2).circle(CAP_OD / 2 - 0.3).extrude(zm + MAN_Z + 30)
+    return [("喷嘴头", "AL", nozzle_tip()), ("定心旋流片", "PRINT", nozzle_spider().translate((0, 0, 5))),
+            ("喷头杆(不锈钢管,外购)", "BUY", shaft), ("药液毛细管(外购)", "SCREEN", cap),
+            ("喷头歧管", "AL", nozzle_manifold().translate((0, 0, zm)))]
 
 
 # ---------------- 注射筒加热套(3D 打印,两个相同的半壳) ----------------
@@ -146,7 +118,7 @@ SYR_GAP = 4.5     # 注射筒与半壳之间留给硅胶加热片和保温棉的
 
 
 def syringe_jacket_half():
-    """半圆筒,轴线沿 X。两片对扣包住高压注射器的针筒,内衬硅胶加热片。"""
+    """半圆筒,轴线沿 X。两片对扣包住注射泵的针筒,内衬硅胶加热片。"""
     ri = SYR_D / 2 + SYR_GAP
     ro = ri + 2.5
     h = cq.Workplane("YZ").circle(ro).circle(ri).extrude(SYR_L)
@@ -193,7 +165,7 @@ def box_body():
         b = b.union(cq.Workplane("XY").workplane(offset=BW).center(x, y).circle(4.5).circle(1.3).extrude(BZ - BW))
     side = lambda x, d: cq.Workplane("XZ").center(x, BZ * 0.4).circle(d / 2).extrude(-BW - 1)   # y=0 侧面开孔
     step = (BX - 44) / 6
-    for i, d in enumerate((16.2, 16.2, 16.2, 16.2, 16.2, 12.2, 12.2)):   # GX16:电源、注射筒套、保温板、加湿底座、输气管;GX12:循环泵、腹腔探头和压力
+    for i, d in enumerate((16.2, 16.2, 16.2, 16.2, 16.2, 12.2, 12.2)):   # GX16:电源、注射筒套、喷头歧管、加湿底座、输气管;GX12:循环泵、腹腔探头和压力
         b = b.cut(side(22 + i * step, d))
     return b
 
@@ -222,32 +194,6 @@ def box_lid():
     return l
 
 
-def heater_assembly():
-    """仅供查看:下板 + 翻过来的上板,检查槽和孔是否对齐(不导出加工)。"""
-    lower = plate(False)
-    upper = plate(True).rotate((0, 0, 0), (1, 0, 0), 180).translate((0, PW, 2 * PT + 12))
-    return lower.union(upper)
-
-
-def _flip(shape, w, h):
-    """绕 X 轴翻 180 度后放回原位:上板、上壳扣到下半部上。"""
-    return shape.rotate((0, 0, 0), (1, 0, 0), 180).translate((0, w, h))
-
-
-def heater_module_parts(lift=0.0):
-    """高压管保温板四件按装配位置摆放。lift 为上半部抬起的距离。返回 [(名称, 类别, 实体)]。"""
-    off = S_GAP + S_WALL
-    oy = PW + 2 * off
-    zp = S_FLOOR + S_INSUL                      # 下板底面高度
-    top = S_FLOOR + S_DEPTH                     # 合模面高度
-    return [
-        ("保温板 下壳", "PRINT", heater_shell(False)),
-        ("保温铝板 下板", "AL", plate(False).translate((off, off, zp))),
-        ("保温铝板 上板", "AL", _flip(plate(True), PW, 0).translate((off, off, top + PT + lift))),
-        ("保温板 上壳", "PRINT", _flip(heater_shell(True), oy, 2 * top + lift)),
-    ]
-
-
 def syringe_jacket_parts(lift=0.0):
     """两片加热套包住注射筒。轴线沿 X。"""
     ro = SYR_D / 2 + SYR_GAP + 2.5
@@ -256,7 +202,7 @@ def syringe_jacket_parts(lift=0.0):
     syr = cq.Workplane("YZ").workplane(offset=-25).circle(SYR_D / 2).extrude(SYR_L + 45)
     tip = cq.Workplane("YZ").workplane(offset=SYR_L + 20).circle(4).extrude(25)
     return [("注射筒加热套 半壳", "PRINT", upper), ("注射筒加热套 半壳", "PRINT", lower),
-            ("高压注射器针筒(示意)", "SOFT", syr), ("高压注射器针筒(示意)", "SOFT", tip)]
+            ("注射泵针筒(示意)", "SOFT", syr), ("注射泵针筒(示意)", "SOFT", tip)]
 
 
 def humidifier_parts():
@@ -273,9 +219,6 @@ def _tube(pts, t0=(0, 0, -1), t1=None, d=4.1):
 
 def full_assembly():
     """仅供查看:手术室里的摆放。灰色和半透明的是外购设备、病人和管路的示意,尺寸为大致比例。"""
-    off = S_GAP + S_WALL
-    ox = PL + 2 * off
-    top = S_FLOOR + S_DEPTH
     parts = []
     add = lambda n, k, s: parts.append((n, k, s))
     box = lambda x0, x1, y0, y1, z0, z1: cq.Workplane("XY").box(x1 - x0, y1 - y0, z1 - z0, centered=False).translate((x0, y0, z0))
@@ -284,29 +227,28 @@ def full_assembly():
     add("手术台(示意)", "BUY", box(0, 900, -280, 280, ZT - 60, ZT))
     add("病人腹部(示意)", "SOFT", cq.Workplane("XY").workplane(offset=ZT).center(450, 0).ellipse(270, 175).extrude(120).edges(">Z").fillet(55))
     ZS = ZT + 120                                                      # 腹壁最高处
-    tro = {"in": (350, -50), "neb": (450, 45), "out": (550, -50)}
-    for k, (x, y) in tro.items():
-        add("穿刺器(示意)", "BUY", cyl(x, y, ZS - 30, ZS + 80, 13))
-    add("雾化喷头(示意)", "BUY", cyl(*tro["neb"], ZS + 80, ZS + 135, 9))
-    # 腹腔温度探头:经穿刺器旁的细线
-    add("腹腔温度探头(示意)", "BUY", cyl(420, -90, ZS - 20, ZS + 40, 3))
+    nx, ny = 430.0, 30.0                                               # 喷头所在的穿刺器
+    ox_, oy_ = 570.0, -60.0                                            # 回气的穿刺器
+    add("穿刺器(示意)", "BUY", cq.Workplane("XY").workplane(offset=ZS - 30).center(nx, ny).circle(7.5).circle(NOZ_D / 2 + 0.3).extrude(110))
+    add("穿刺器(示意)", "BUY", cyl(ox_, oy_, ZS - 30, ZS + 80, 13))
+    add("腹腔温度探头(示意)", "BUY", cyl(380, -90, ZS - 20, ZS + 40, 3))
     add("腹腔温度探头(示意)", "BUY", cyl(520, 80, ZS - 20, ZS + 40, 3))
+    # 喷头:喷口伸进腹腔 40 mm
+    z0 = ZS - 40
+    for n, k, s in nozzle_parts():
+        add(n, k, s.translate((nx, ny, z0)))
+    zm = z0 + 8 + NOZ_L - MAN_IN                                       # 歧管底面
+    gas_in = (nx + MAN_X / 2, ny, zm + MAN_IN + 8)
+    cap_top = (nx, ny, zm + MAN_Z + 30)
 
-    # 高压注射器在病人一侧,针筒指向手术台
-    add("高压注射器(示意)", "BUY", cyl(450, -620, 0, 1010, 34))
-    add("高压注射器(示意)", "BUY", box(385, 515, -690, -560, 1010, 1130))
-    zs, ys = 1070.0, -560.0
+    # 注射泵在病人一侧
+    add("注射泵(示意)", "BUY", cyl(450, -620, 0, 1000, 34))
+    add("注射泵(示意)", "BUY", box(330, 590, -690, -560, 1000, 1090))
+    zs = 1090 + SYR_D / 2 + SYR_GAP + 6
     for n, k, s in syringe_jacket_parts():
-        add(n, k, s.rotate((0, 0, 0), (0, 0, 1), 90).translate((450, ys + 25, zs)))
-    tipy = ys + 25 + SYR_L + 45
-    # 高压管保温板放在手术台边,靠近喷头,绑带固定
-    bx0, by0 = 330.0, -272.0
-    for n, k, s in heater_module_parts():
-        add(n, k, s.translate((bx0, by0, ZT)))
-    y_in, y_out, zt = by0 + off + RUN_Y[0], by0 + off + RUN_Y[2], ZT + top
-    d_hp = 2 * GROOVE_R
-    add("高压管", "SOFT", _tube([(450, tipy, zs), (330, tipy + 60, zs - 110), (bx0 - 70, y_in - 10, zt + 25), (bx0, y_in, zt)], t0=(0, 1, 0), t1=(1, 0, 0), d=d_hp))
-    add("高压管", "SOFT", _tube([(bx0 + ox, y_out, zt), (bx0 + ox + 70, y_out + 60, zt + 70), (tro["neb"][0] + 30, tro["neb"][1] - 40, ZS + 150), (tro["neb"][0], tro["neb"][1], ZS + 135)], t0=(1, 0, 0), t1=(0, 0.3, -1), d=d_hp))
+        add(n, k, s.translate((370, -625, zs)))
+    tipx = 370 + SYR_L + 45
+    add("药液细管", "SOFT", _tube([(tipx, -625, zs), (tipx + 60, -520, zs + 60), (nx + 40, ny - 150, cap_top[2] + 90), cap_top], t0=(1, 0, 0), t1=(0, 0.3, -1), d=2.5))
 
     # 设备架在病人另一侧:主机、加湿底座、循环泵和过滤器
     px, py = 300.0, 640.0
@@ -323,27 +265,24 @@ def full_assembly():
         add(n, k, s.translate((hx, hy, zsh)))
     add("循环泵和过滤器(示意)", "BUY", box(px + 30, px + 160, py - 190, py - 60, zsh, zsh + 90))
     ztop = zsh + 45 + 85
-    add("加热输气管(进气)", "SOFT", _tube([(hx, hy, ztop), (hx + 20, hy - 180, ztop + 110), (tro["in"][0] - 10, tro["in"][1] + 170, ZS + 190), (tro["in"][0], tro["in"][1], ZS + 80)], t0=(0, 0, 1), t1=(0, -0.2, -1), d=10))
-    add("回气管(经过滤器)", "SOFT", _tube([(tro["out"][0], tro["out"][1], ZS + 80), (tro["out"][0] + 10, tro["out"][1] + 170, ZS + 200), (px + 110, py - 300, zsh + 230), (px + 95, py - 125, zsh + 90)], t0=(0, 0, 1), t1=(0, 0.2, -1), d=10))
+    add("加热输气管(到喷头)", "SOFT", _tube([(hx, hy, ztop), (hx + 30, hy - 180, ztop + 120), (gas_in[0] + 130, gas_in[1] + 120, gas_in[2] + 40), gas_in], t0=(0, 0, 1), t1=(-1, -0.3, 0), d=10))
+    add("回气管(经过滤器)", "SOFT", _tube([(ox_, oy_, ZS + 80), (ox_ + 10, oy_ + 170, ZS + 200), (px + 110, py - 300, zsh + 230), (px + 95, py - 125, zsh + 90)], t0=(0, 0, 1), t1=(0, 0.2, -1), d=10))
     return parts
 
 
 # 名称 -> (生成函数, 做法, 中文名)
 BUILDERS = {
-    "01_line_plate_lower_AL6061": (lambda: plate(False), "CNC", "保温铝板 下板"),
-    "02_line_plate_upper_AL6061": (lambda: plate(True), "CNC", "保温铝板 上板"),
-    "03_line_shell_lower": (lambda: heater_shell(False), "PRINT", "保温板 下壳"),
-    "04_line_shell_upper": (lambda: heater_shell(True), "PRINT", "保温板 上壳"),
-    "05_syringe_jacket_half": (syringe_jacket_half, "PRINT", "注射筒加热套 半壳(做 2 件)"),
-    "06_humidifier_plate_AL6061": (hum_plate, "CNC", "加湿铝盘"),
-    "07_humidifier_base": (hum_base, "PRINT", "加湿底座"),
-    "08_control_box_body": (box_body, "PRINT", "主控盒"),
-    "09_control_box_lid": (box_lid, "PRINT", "主控盒盖"),
+    "01_nozzle_tip_316L": (nozzle_tip, "CNC", "喷嘴头"),
+    "02_nozzle_spider_316L": (nozzle_spider, "CNC", "定心旋流片"),
+    "03_nozzle_manifold_AL6061": (nozzle_manifold, "CNC", "喷头歧管"),
+    "04_syringe_jacket_half": (syringe_jacket_half, "PRINT", "注射筒加热套 半壳(做 2 件)"),
+    "05_humidifier_plate_AL6061": (hum_plate, "CNC", "加湿铝盘"),
+    "06_humidifier_base": (hum_base, "PRINT", "加湿底座"),
+    "07_control_box_body": (box_body, "PRINT", "主控盒"),
+    "08_control_box_lid": (box_lid, "PRINT", "主控盒盖"),
 }
 VIEW_ONLY = {
-    "00_plates_open_check": (heater_assembly, "VIEW", "上下铝板对合检查(上板抬起 12)"),
-    "20_line_warmer": (lambda: heater_module_parts(0), "VIEW", "高压管保温板装配"),
-    "21_line_warmer_open": (lambda: heater_module_parts(25), "VIEW", "高压管保温板装配(打开)"),
+    "20_nozzle": (nozzle_parts, "VIEW", "气助雾化喷头装配(点“剖切”看内部)"),
     "22_syringe_jacket": (lambda: syringe_jacket_parts(0), "VIEW", "注射筒加热套装配"),
     "23_humidifier": (humidifier_parts, "VIEW", "加湿加热底座装配"),
     "30_full_assembly": (full_assembly, "VIEW", "手术室整体布置"),

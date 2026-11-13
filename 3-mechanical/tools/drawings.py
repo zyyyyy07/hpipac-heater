@@ -44,46 +44,40 @@ PRINT_NOTES = ["材料 PETG,3D 打印(FDM),层高 0.2。", "未注尺寸以同�
 
 def specs():
     """每个零件的图号、材料、技术要求和孔的说明。写成函数是因为内容随当前参数变化。"""
-    half = math.sqrt(b.GROOVE_R ** 2 - (b.GROOVE_R - b.GROOVE_DEPTH) ** 2)
-    plate_notes = lambda upper: [
-        "材料 6061-T6 铝合金,数控铣削。",
-        "未注尺寸以同名 STEP 模型为准,未注公差 ±0.1。",
-        "槽面(合模面)平面度 0.05,槽内粗糙度 Ra≤1.6。",
-        "槽中心线位置度 0.1,上下板合模后槽须对齐。槽按高压管外径加工,下单前先量管径。",
-        "锐边倒钝 C0.3,槽口倒角 C0.2 去毛刺。",
-        "样机不做表面处理;成品做硬质阳极氧化。",
-        "上板与下板为镜像件,不可互换。"]
-    groove = lambda upper: [
-        f"管槽:R{fmt(b.GROOVE_R)} 球头刀沿中心线铣削,槽深 {fmt(b.GROOVE_DEPTH)}(+0.05/0),槽口宽 {half * 2:.2f},中心线全长 {b.groove_length():.0f}。",
-        "中心线:三条直槽 y = " + "、".join(fmt(b.PW - v if upper else v) for v in b.RUN_Y)
-        + f";两个半圆弯 R{fmt(b.BEND_R)},圆心 x = {fmt(b.PL - b.TURN_X)} 和 {fmt(b.TURN_X)}。两端直槽通到板边。",
-        f"测温孔自 y=0 长边钻入,孔中心距槽面 {fmt(b.PT - b.NTC_Z)}(槽底与背面正中)。"]
+    ss_notes = ["材料 316L 不锈钢,数控车削。台架试水阶段可用光固化树脂打印代替。", "未注尺寸以同名 STEP 模型为准,未注公差 ±0.05。",
+                "内腔和喷口粗糙度 Ra≤0.8,喷口边缘保持锐边、无毛刺、无倒角。", "超声清洗,无油无屑。"]
     return {
-        "01_line_plate_lower_AL6061": dict(no="HP-01", mat="6061-T6", notes=plate_notes(False), extra=groove(False), plate=False,
-                                           holes={2.5: "攻 M3 螺纹", 3.0: "φ3 H7 定位销孔", 2.2: "测温孔"}),
-        "02_line_plate_upper_AL6061": dict(no="HP-02", mat="6061-T6", notes=plate_notes(True), extra=groove(True), plate=True,
-                                           holes={3.4: "M3 过孔", 3.0: "φ3 H7 定位销孔", 2.2: "测温孔"}),
-        "03_line_shell_lower": dict(no="HP-03", mat="PETG", notes=PRINT_NOTES + ["填充 30%。腔内放保温垫和下铝板。"],
-                                    extra=["壳口两端的缺口是高压管进出口;长边中部 8×5 开口走加热片和测温线。",
-                                           "另一条长边的两个带槽耳穿 15 mm 绑带,把保温板固定在手术台边。保温板不允许吊在高压管上。"]),
-        "04_line_shell_upper": dict(no="HP-04", mat="PETG", notes=PRINT_NOTES + ["填充 30%。腔内放保温垫和上铝板。"],
-                                    holes={7.0: "夹紧螺丝操作孔"}, extra=["壳口两端的缺口是高压管进出口,与下壳缺口对齐。"]),
-        "05_syringe_jacket_half": dict(no="HP-05", mat="PETG", notes=PRINT_NOTES + ["填充 30%。做 2 件,两件相同。"],
+        "01_nozzle_tip_316L": dict(no="HP-01", mat="316L", notes=ss_notes + ["喷口与外圆同轴度 0.03。"],
+                                   extra=[f"喷口直径 {fmt(b.NOZ_ORI)}(公差 +0.02/0),直段长 1。毛细管外径 {fmt(b.CAP_OD)},环形气隙面积 {b.GAS_AREA} mm2。",
+                                          f"上段 φ{fmt(b.NOZ_D - 2)} 插进喷头杆内孔,激光焊或医用环氧胶封固。下段 φ{fmt(b.NOZ_D)} 与喷头杆外径齐平。",
+                                          "内腔从 φ%s 以锥面收缩到喷口。" % fmt(b.NOZ_D - 4)]),
+        "02_nozzle_spider_316L": dict(no="HP-02", mat="316L", notes=ss_notes + ["中心孔与外圆同轴度 0.02。"],
+                                      holes={round(b.CAP_OD + 0.06, 2): "毛细管定心孔"},
+                                      extra=["三条 1 mm 宽的切向槽通气,并让气流旋转。线切割或微铣加工。",
+                                             "压进喷嘴头内腔,距喷口端面 5。毛细管穿过中心孔,末端伸出喷口 0.5。"]),
+        "03_nozzle_manifold_AL6061": dict(no="HP-03", mat="6061-T6", holes={2.2: "测温孔", 8.6: "进气口,攻 G1/8", 6.0: "进气通道", 4.2: "测压口,攻 M5",
+                                                                           5.0: "毛细管压紧接头,攻 M6", round(b.NOZ_D + 0.06, 2): "喷头杆插孔", round(b.NOZ_D - 2, 2): "气室"},
+                                          notes=["材料 6061-T6 铝合金,数控加工。只接触气体,不接触药液。", "未注尺寸以同名 STEP 模型为准,未注公差 ±0.1。",
+                                                 "喷头杆插孔 H7,插入后 O 形圈加医用环氧胶密封。", "各螺纹口和插孔 100 kPa 气密。",
+                                                 "锐边倒钝 C0.3。样机不做表面处理;成品做硬质阳极氧化。"],
+                                          extra=["喷头杆从底面插入 20;气从 +X 侧面进气室,沿喷头杆向下;毛细管从顶面中心穿出,用 M6 压紧接头密封。",
+                                                 "加热片贴在 -Y 大平面上;两只测温探头插进 +Y 面的测温孔。"]),
+        "04_syringe_jacket_half": dict(no="HP-04", mat="PETG", notes=PRINT_NOTES + ["填充 30%。做 2 件,两件相同。"],
                                        holes={3.4: "M3 过孔,两片对扣"},
                                        extra=[f"内径 {fmt(b.SYR_D + 2 * b.SYR_GAP)}:注射筒外径 {fmt(b.SYR_D)},每边留 {fmt(b.SYR_GAP)} 贴硅胶加热片和保温棉。下单前先量注射筒外径。",
                                               "一端顶部的缺口是加热片和测温线的出线口。"]),
-        "06_humidifier_plate_AL6061": dict(no="HP-06", mat="6061-T6", holes={3.4: "M3 沉头螺丝孔,上表面锪 90° 沉头 φ6.5", 2.2: "测温孔"},
+        "05_humidifier_plate_AL6061": dict(no="HP-05", mat="6061-T6", holes={3.4: "M3 沉头螺丝孔,上表面锪 90° 沉头 φ6.5", 2.2: "测温孔"},
                                            notes=["材料 6061-T6 铝合金,数控加工。", "未注尺寸以同名 STEP 模型为准,未注公差 ±0.1。",
                                                   "上表面(放加湿罐的面)平面度 0.05,粗糙度 Ra≤1.6。", "锐边倒钝 C0.3。",
                                                   "样机不做表面处理;成品做硬质阳极氧化。"],
                                            extra=[f"直径 {fmt(b.HUM_D)} 按加湿罐底面直径定,下单前先量加湿罐。", "两个测温孔从同一侧的圆周面钻入,孔中心在板厚正中。"]),
-        "07_humidifier_base": dict(no="HP-07", mat="PETG 或耐温 ABS", notes=PRINT_NOTES + ["填充 30%。铝盘最高 85 ℃,底座与铝盘之间垫 3 mm 硅胶隔热垫。"],
+        "06_humidifier_base": dict(no="HP-06", mat="PETG 或耐温 ABS", notes=PRINT_NOTES + ["填充 30%。铝盘最高 85 ℃,底座与铝盘之间垫 3 mm 硅胶隔热垫。"],
                                    holes={2.6: "M3 自攻螺丝底孔,固定铝盘", 12.2: "GX12 航空插座"},
                                    extra=["顶部沉台放铝盘,铝盘高出底座 0.5。沉台一侧的缺口走测温线。"]),
-        "08_control_box_body": dict(no="HP-08", mat="PETG", notes=PRINT_NOTES + ["填充 30%。开口朝上打印。"],
-                                    holes={2.6: "M3 自攻螺丝底孔(四角螺丝柱)", 16.2: "GX16 航空插座:电源、注射筒套、保温板、加湿底座、输气管",
+        "07_control_box_body": dict(no="HP-07", mat="PETG", notes=PRINT_NOTES + ["填充 30%。开口朝上打印。"],
+                                    holes={2.6: "M3 自攻螺丝底孔(四角螺丝柱)", 16.2: "GX16 航空插座:电源、注射筒套、喷头歧管、加湿底座、输气管",
                                            12.2: "GX12 航空插座:循环泵、腹腔探头和压力"}),
-        "09_control_box_lid": dict(no="HP-09", mat="PETG", notes=PRINT_NOTES + ["填充 30%。外表面朝下打印。"],
+        "08_control_box_lid": dict(no="HP-08", mat="PETG", notes=PRINT_NOTES + ["填充 30%。外表面朝下打印。"],
                                    holes={3.4: "M3 过孔", 5.2: "φ5 指示灯(红、黄、绿)", 16.2: "中止键 φ16", 12.2: "消音键 φ12",
                                           12.0: "蜂鸣器出声孔"},
                                    extra=[f"矩形窗口 {fmt(b.SCR_W)}×{fmt(b.SCR_H)} 是 7 英寸触摸屏的可视窗,中心 ({fmt(b.BX / 2)},{fmt(b.lid_screen_y())})。屏的玻璃从盒内用双面胶贴在盖板背面。",
@@ -322,16 +316,11 @@ def draw_sheet(sh, m, page, pages):
     zh = [h for h in m["holes"] if h["axis"] == 2]
     xs = [0, X] + [h["pos"][0] for h in zh] + sp.get("ord_x", [])
     ys = [0, Y] + [h["pos"][1] for h in zh] + sp.get("ord_y", [])
-    if "plate" in sp:
-        xs += [b.TURN_X, b.PL - b.TURN_X] + list(b.NTC_X if not sp["plate"] else b.NTC_X[:1])
-        ys += [(b.PW - v) if sp["plate"] else v for v in b.RUN_Y]
     _ordinates(sh, xs, lambda v: tx + v * scale, ty, True)
     _ordinates(sh, ys, lambda v: ty + v * scale, tx, False)
-    # 右上:铝板画槽截面详图,其余画轴测图
+    # 右上:轴测图
     rx = lx + Y * scale + 14
-    if "plate" in sp and 400 - rx >= 60:
-        _groove_detail(sh, rx, 205)
-    elif 400 - rx >= 45 and m["iso"]:
+    if 400 - rx >= 45 and m["iso"]:
         us = [p[0] for pl in m["iso"] for p in pl]; vs = [p[1] for pl in m["iso"] for p in pl]
         s2 = min((400 - rx) / (max(us) - min(us)), 95 / (max(vs) - min(vs)), scale)
         oy = 272 - (max(vs) - min(vs)) * s2
@@ -381,25 +370,6 @@ def draw_sheet(sh, m, page, pages):
     sh.text(275, 13, f"版本 {REV}", 2.6); sh.text(303, 13, datetime.date.today().isoformat(), 2.6)
     sh.text(344, 13, f"第 {page}/{pages} 张", 2.6); sh.text(372, 13, PROJECT, 2.3)
     sh.text(12, 289, f"三维模型:3-mechanical/models/{'cnc' if m['how'] == 'CNC' else 'print'}/{m['name']}.step        二维:3-mechanical/drawings/dxf/{m['name']}.dxf", 2.4)
-
-
-def _groove_detail(sh, x, y):
-    """铝板槽截面详图 5:1。(x, y) 为截面左下角。"""
-    k, w = 5.0, 12.0
-    half = math.sqrt(b.GROOVE_R ** 2 - (b.GROOVE_R - b.GROOVE_DEPTH) ** 2)
-    top, cx = y + b.PT * k, x + w * k / 2
-    cz = top + (b.GROOVE_R - b.GROOVE_DEPTH) * k
-    a0, a1 = math.atan2(top - cz, -half * k), math.atan2(top - cz, half * k)
-    arc = [(cx + b.GROOVE_R * k * math.cos(a0 + i * (a1 - a0) / 40), cz + b.GROOVE_R * k * math.sin(a0 + i * (a1 - a0) / 40)) for i in range(41)]
-    sh.poly([(x, top)] + arc + [(x + w * k, top), (x + w * k, y), (x, y), (x, top)], 0.35)
-    ny = y + b.NTC_Z * k
-    c = sh.c; c.setLineWidth(0.18); c.setDash([1.2, 0.8]); c.circle(cx, ny, 1.1 * k, stroke=1, fill=0); c.setDash([])
-    sh.vdim(y, top, x, -6, fmt(b.PT))
-    sh.vdim(top - b.GROOVE_DEPTH * k, top, x + w * k, 6, fmt(b.GROOVE_DEPTH))
-    sh.hdim(cx - half * k, cx + half * k, top, 6, f"{half * 2:.2f}")
-    sh.text(x, top + 16, "槽截面详图 5:1", 3.2)
-    sh.text(x, y - 6, f"R{fmt(b.GROOVE_R)} 球头刀,槽深 {fmt(b.GROOVE_DEPTH)} (+0.05/0)", 2.5)
-    sh.text(x, y - 10.5, f"虚线圆:测温孔 φ2.2,中心距背面 {fmt(b.NTC_Z)}", 2.5)
 
 
 # ---------------- DXF ----------------

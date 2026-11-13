@@ -2,13 +2,13 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>手术控制台 · hPIPAC 加热系统</title>
 <style>
-:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--line:#2a444d;--ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc;
+:root{--ff:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--rule:#2a444d;--ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc;
   --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#a876d9}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.5 "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;padding:14px 18px;font-variant-numeric:tabular-nums}
 a{color:var(--acc)}
 input,button,select{font:inherit}
-input,select{background:#0b1418;border:1px solid var(--line);color:var(--fg);padding:6px 10px;border-radius:6px;min-width:0}
+input,select{background:#0b1418;border:1px solid var(--rule);color:var(--fg);padding:6px 10px;border-radius:6px;min-width:0}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 button{border:1px solid var(--acc);background:transparent;color:var(--acc);border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700}
 button:disabled{opacity:.35;cursor:not-allowed}
@@ -16,7 +16,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 
 header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 h1{font-size:22px;margin:0}
-.pill{padding:2px 12px;border-radius:14px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.pill{padding:2px 12px;border-radius:14px;border:1px solid var(--rule);color:var(--dim);white-space:nowrap}
 .pill.on{border-color:var(--ok);color:var(--ok)}.pill.off{border-color:var(--crit);background:var(--crit);color:#fff}
 header label{display:flex;gap:8px;align-items:center}#by{width:9em}
 
@@ -31,24 +31,28 @@ header label{display:flex;gap:8px;align-items:center}#by{width:9em}
 .banner button{background:rgba(0,0,0,.25);border-color:currentColor;color:inherit;white-space:nowrap}
 .banner .lv{font-size:15px;border:1px solid currentColor;border-radius:4px;padding:0 6px;margin-right:10px;vertical-align:3px}
 [hidden]{display:none!important}
+/* 喷雾阶段雾化气停了:整页最大的一块,压过其他一切 */
+#stopNow{background:var(--crit);color:#fff;border-radius:8px;padding:18px 28px 22px;margin-bottom:12px;font-size:30px;font-weight:700}
+#stopNow .big{font:700 clamp(90px,10.5vw,200px)/1.1 var(--ff)}
+#stopNow .why{font-size:24px;font-weight:400}
 
 /* 阶段条 */
 .steps{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;list-style:none;margin:0 0 12px;padding:0}
-.steps li{background:var(--card);border-bottom:6px solid var(--line);border-radius:6px 6px 0 0;padding:8px 14px;color:var(--dim);font-size:22px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.steps li{background:var(--card);border-bottom:6px solid var(--rule);border-radius:6px 6px 0 0;padding:8px 14px;color:var(--dim);font-size:22px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .steps li.done{color:var(--fg);border-color:var(--dim)}
 .steps li.cur{background:#1f4650;color:#fff;border-color:var(--acc);font-weight:700;font-size:26px}
 .steps li span{font-size:18px;font-weight:400;font-variant-numeric:tabular-nums}
 
 main{display:grid;grid-template-columns:minmax(330px,25%) 1fr;gap:12px;align-items:stretch}
 @media (max-width:1100px){main{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;min-width:0}
 h2{font-size:17px;margin:0 0 6px;color:var(--dim);font-weight:400}
 .stale .tiles,.stale .now .t{opacity:.45}
 
 /* 左上:当前阶段、计时、操作 */
 .now{display:flex;flex-direction:column;gap:8px}
-#phName{font-size:44px;font-weight:700;line-height:1.1}
-#tBig{font-size:clamp(56px,5.2vw,96px);font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+#phName{font:700 44px/1.1 var(--ff)}
+#tBig{font:700 clamp(56px,5.2vw,96px)/1.05 var(--ff);font-variant-numeric:tabular-nums}
 #tBig.huge{font-size:clamp(84px,8.6vw,168px)}
 #checks{list-style:none;margin:0;padding:0;font-size:18px}
 #checks li{display:flex;gap:10px}#checks i{font-style:normal;width:1.2em;color:var(--dim)}#checks li.y i{color:var(--ok)}
@@ -62,15 +66,15 @@ h2{font-size:17px;margin:0 0 6px;color:var(--dim);font-weight:400}
 
 /* 右上:读数 */
 .tiles{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-.tile{grid-column:span 4}.tile.ip{grid-row:span 2;display:flex;flex-direction:column}.tile.drug{grid-column:span 8}.tile.pf{grid-column:span 2}
-@media (max-width:1400px){.tile.pf{grid-column:span 4}.tile.gas{grid-column:span 8}.tile.ip{grid-row:span 3}}
-@media (max-width:760px){.tile,.tile.drug,.tile.gas,.tile.pf{grid-column:span 12}}
+.tile{grid-column:span 4}.tile.ip{grid-row:span 2;display:flex;flex-direction:column}.tile.pf{grid-column:span 2}
+@media (max-width:1400px){.tile.drug,.tile.gas,.tile.fl{grid-column:span 8}.tile.pf{grid-column:span 4}.tile.ip{grid-row:span 4}}
+@media (max-width:760px){.tile,.tile.drug,.tile.gas,.tile.pf,.tile.fl{grid-column:span 12}}
 .vals{display:flex;gap:22px;flex-wrap:wrap}
-.v b{font-size:clamp(40px,3.6vw,68px);line-height:1.1;font-weight:700}
+.v b{font:700 clamp(40px,3.6vw,68px)/1.1 var(--ff);font-variant-numeric:tabular-nums}
 .v .u{font-size:20px;color:var(--dim);margin-left:4px}
 .v .l{font-size:18px}.v .s{font-size:15px;color:var(--dim)}
 .tile.ip h2{font-size:22px;color:var(--fg)}
-#ipMean{font-size:clamp(84px,8.6vw,168px);line-height:1}
+#ipMean{font:700 clamp(84px,8.6vw,168px)/1 var(--ff);font-variant-numeric:tabular-nums}
 .tile.ip .u{font-size:32px}
 #ipDiff{font-size:24px;margin:4px 0 14px}
 .tile.ip .vals{margin-top:auto}.tile.ip .v b{font-size:clamp(36px,3.2vw,56px)}
@@ -85,7 +89,7 @@ h2{font-size:17px;margin:0 0 6px;color:var(--dim);font-weight:400}
 #chart{display:block;width:100%;height:280px}
 #chart text{fill:var(--dim);font-size:14px;font-variant-numeric:tabular-nums}
 #chart text.e{fill:var(--fg);font-size:15px}
-#tip{position:absolute;pointer-events:none;background:#0b1418;border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#tip{position:absolute;pointer-events:none;background:#0b1418;border:1px solid var(--rule);border-radius:6px;padding:6px 10px;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
 #tip i{display:inline-block;width:12px;height:0;border-top:3px solid;vertical-align:middle;margin-right:6px}
 
 /* 左下:设置和记录 */
@@ -109,6 +113,7 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
   <a href="/cases">手术记录</a>
 </header>
 
+<div id="stopNow" hidden role="alert"><div class="big">立即停止注射泵</div><div>雾化气已停,药液会不成雾直接滴入。</div><div class="why" id="stopWhy"></div></div>
 <div id="net" class="banner net" hidden role="alert"></div>
 <div id="alarms" class="banner" hidden role="alert"><ul id="alList"></ul><button id="bAck">确认报警</button><button id="bMute">消音 2 分钟</button></div>
 
@@ -128,8 +133,8 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
     </div>
     <ul id="checks" hidden>
       <li data-k="syr"><i></i>注射筒到温(目标 ±0.5 ℃)</li>
-      <li data-k="line"><i></i>高压管到温(目标 ±0.5 ℃)</li>
-      <li data-k="gas"><i></i>病人端气温到目标 −1 ℃</li>
+      <li data-k="noz"><i></i>喷头歧管到温(目标 ±0.5 ℃)</li>
+      <li data-k="gas"><i></i>喷头端气温到目标 −1 ℃</li>
       <li data-k="ip"><i></i>腹腔平均温度到目标 −1 ℃</li>
     </ul>
     <div class="acts">
@@ -155,15 +160,7 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
       <h2>药液温度</h2>
       <div class="vals">
         <div class="v"><b id="syr">--</b><span class="u">℃</span><div class="l">注射筒加热套</div><div class="s">保护传感器 <span id="syr2" class="num">--</span></div></div>
-        <div class="v"><b id="line">--</b><span class="u">℃</span><div class="l">高压管保温板</div><div class="s">保护传感器 <span id="line2" class="num">--</span></div></div>
-        <div class="v"><b id="lineOut">--</b><span class="u">℃</span><div class="l">高压管出口管壁</div><div class="s">最接近喷头的一点</div></div>
-      </div>
-    </div>
-    <div class="card tile gas">
-      <h2>气体温度</h2>
-      <div class="vals">
-        <div class="v"><b id="gasEnd">--</b><span class="u">℃</span><div class="l">输气管病人端</div></div>
-        <div class="v"><b id="humOut">--</b><span class="u">℃</span><div class="l">加湿罐出口</div><div class="s">底座 <span id="humPlate" class="num">--</span> ℃</div></div>
+        <div class="v"><b id="noz">--</b><span class="u">℃</span><div class="l">喷头歧管</div><div class="s">保护传感器 <span id="noz2" class="num">--</span></div></div>
       </div>
     </div>
     <div class="card tile pf">
@@ -171,8 +168,19 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
       <div class="v"><b id="press">--</b><div class="l dim">mmHg</div></div>
     </div>
     <div class="card tile pf">
-      <h2>循环流量</h2>
-      <div class="v"><b id="flow">--</b><div class="l dim">L/min</div><div class="s">设定 <span id="flowSet" class="num">--</span></div></div>
+      <h2>雾化气压</h2>
+      <div class="v"><b id="nozP">--</b><div class="l dim">kPa</div></div>
+    </div>
+    <div class="card tile gas">
+      <h2>气体温度</h2>
+      <div class="vals">
+        <div class="v"><b id="gasEnd">--</b><span class="u">℃</span><div class="l">输气管喷头端</div></div>
+        <div class="v"><b id="humOut">--</b><span class="u">℃</span><div class="l">加湿罐出口</div><div class="s">底座 <span id="humPlate" class="num">--</span> ℃</div></div>
+      </div>
+    </div>
+    <div class="card tile fl">
+      <h2>循环泵流量</h2>
+      <div class="v"><b id="flow">--</b><span class="u">L/min</span><div class="l" id="flowNote"></div></div>
     </div>
   </section>
 
@@ -181,10 +189,11 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
       <h2>设置(改了以后点“应用”才发给设备)</h2>
       <div class="set">
         <label for="sTarget">目标温度 37.0–43.0 ℃</label><input id="sTarget" type="number" min="37" max="43" step="0.1"><button data-set="target">应用</button>
-        <label for="sFlow">循环流量 0–15 L/min</label><input id="sFlow" type="number" min="0" max="15" step="0.5"><button data-set="flow">应用</button>
+        <label for="sFlow">循环流量 0–15 L/min(预热、就绪、暴露阶段用)</label><input id="sFlow" type="number" min="0" max="15" step="0.5"><button data-set="flow">应用</button>
+        <label for="sNeb">雾化气流量 5–15 L/min(喷雾阶段用)</label><input id="sNeb" type="number" min="5" max="15" step="0.5"><button data-set="nebFlow">应用</button>
         <label for="sExpose">暴露时间 1–60 分钟</label><input id="sExpose" type="number" min="1" max="60" step="1"><button data-set="exposeMin">应用</button>
         <span>暴露阶段循环泵:<b id="circState">--</b></span><span></span><button id="bCirc" data-set="circInExpose">--</button>
-        <div class="c dim sm">开着时,暴露阶段循环泵继续把腹腔气体抽出加热再送回。</div>
+        <div class="c dim sm">开着时,暴露阶段循环泵继续把腹腔气体抽出加热,再从喷头送回。</div>
       </div>
     </div>
     <div class="card case">
@@ -204,9 +213,9 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
 
   <section class="card chart">
     <div class="hd"><h2>最近 30 分钟温度(℃)</h2>
-      <div class="lg"><span><i style="border-color:var(--s1)"></i>腹腔平均</span><span><i style="border-color:var(--s2)"></i>输气管病人端</span>
-        <span><i style="border-color:var(--s3)"></i>高压管</span><span><i style="border-color:var(--s4)"></i>注射筒</span><span><i class="d"></i>目标</span></div></div>
-    <svg id="chart" role="img" aria-label="最近 30 分钟的腹腔平均温度、输气管病人端气温、高压管温度、注射筒温度和目标温度曲线"></svg>
+      <div class="lg"><span><i style="border-color:var(--s1)"></i>腹腔平均</span><span><i style="border-color:var(--s2)"></i>输气管喷头端</span>
+        <span><i style="border-color:var(--s3)"></i>喷头歧管</span><span><i style="border-color:var(--s4)"></i>注射筒</span><span><i class="d"></i>目标</span></div></div>
+    <svg id="chart" role="img" aria-label="最近 30 分钟的腹腔平均温度、输气管喷头端气温、喷头歧管温度、注射筒温度和目标温度曲线"></svg>
     <div id="tip" hidden></div>
   </section>
 </main>
@@ -217,9 +226,9 @@ footer{margin-top:14px;font-size:15px;color:var(--dim)}
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
-const SER = [{k: 'ipMean', cn: '腹腔平均', c: 'var(--s1)', w: 3}, {k: 'gasEnd', cn: '输气管病人端', c: 'var(--s2)', w: 2},
-  {k: 'line', cn: '高压管', c: 'var(--s3)', w: 2}, {k: 'syr', cn: '注射筒', c: 'var(--s4)', w: 2}];
-const NEED_ACK = ['IP_HIGH', 'PRESS_HIGH', 'PRESS_LOW', 'WATER_LOW', 'EXPOSE_END'];
+const SER = [{k: 'ipMean', cn: '腹腔平均', c: 'var(--s1)', w: 3}, {k: 'gasEnd', cn: '输气管喷头端', c: 'var(--s2)', w: 2},
+  {k: 'noz', cn: '喷头歧管', c: 'var(--s3)', w: 2}, {k: 'syr', cn: '注射筒', c: 'var(--s4)', w: 2}];
+const NEED_ACK = ['IP_HIGH', 'PRESS_HIGH', 'PRESS_LOW', 'WATER_LOW', 'NOZ_BLOCK', 'EXPOSE_END'];
 let cur = new URLSearchParams(location.search).get('dev') || '', st = null, netOk = true, dev = null, known = null, alKey = '';
 let pts = [], histNow = 0, geom = null, confirmTimer = 0, msgTimer = 0;
 const dirty = {};
@@ -269,7 +278,7 @@ $('#bAck').onclick = () => send('ack', undefined, '确认报警');
 $('#bMute').onclick = () => send('mute', undefined, '消音');
 
 // ---------- 设置 ----------
-const SETS = {target: {el: '#sTarget', min: 37, max: 43, n: 1, cn: '目标温度'}, flow: {el: '#sFlow', min: 0, max: 15, n: 1, cn: '循环流量'},
+const SETS = {target: {el: '#sTarget', min: 37, max: 43, n: 1, cn: '目标温度'}, flow: {el: '#sFlow', min: 0, max: 15, n: 1, cn: '循环流量'}, nebFlow: {el: '#sNeb', min: 5, max: 15, n: 1, cn: '雾化气流量'},
   exposeMin: {el: '#sExpose', min: 1, max: 60, n: 0, cn: '暴露时间'}};
 for (const k in SETS) $(SETS[k].el).addEventListener('input', () => { dirty[k] = true; });
 document.querySelectorAll('[data-set]').forEach(b => b.onclick = async () => {
@@ -330,6 +339,7 @@ function render() {
     $('#bMain').disabled = $('#bAbort').disabled = true;
     return;
   }
+  $('#stopNow').hidden = true;
   const ds = st.devices, ids = ds.map(d => d.id).join();
   if (ids !== known) {
     known = ids;
@@ -352,6 +362,9 @@ function render() {
   if (!on) net.textContent = '设备离线,已经 ' + Math.round(st.now - dev.seen) + ' 秒没有上报。下面是最后一次收到的数据。命令现在送不到设备,要中止请按主机上的红色中止键。';
   $('#main').classList.toggle('stale', !on);
   renderAlarms(L, on);
+  const stopNow = nebStopped(L);   // 断网时保持上一次的样子,不擅自收起
+  $('#stopNow').hidden = !stopNow;
+  if (stopNow) setText('#stopWhy', nebStopWhy(L) + (on ? '' : '设备已离线,这是最后一次收到的状态。'));
 
   // 阶段条和计时
   const idx = STEPS.indexOf(ph);
@@ -367,7 +380,8 @@ function render() {
   } else if (ph === 'IDLE') {
     setText('#tLabel', ''); setText('#tBig', ''); setText('#tSub', '加热和循环泵都没有开。'); big.className = '';
   } else {
-    setText('#tLabel', '本阶段已用时'); setText('#tBig', mmss(L.phSec)); big.className = ''; setText('#tSub', '');
+    setText('#tLabel', '本阶段已用时'); setText('#tBig', mmss(L.phSec)); big.className = '';
+    setText('#tSub', ph !== 'NEBULIZE' ? '' : stopNow ? '雾化气已停。先停注射泵。' : '循环泵正在按雾化气流量送气,这股气就是雾化气。由操作者启动注射泵推药。');
   }
   const rd = readiness(L);
   $('#checks').hidden = ph !== 'PREHEAT';
@@ -386,13 +400,15 @@ function render() {
   val('#ipMean', m, 1, ipCls); val('#ip1', t.ip1, 1, isNum(t.ip1) && t.ip1 >= 43.5 ? 'hi' : ''); val('#ip2', t.ip2, 1, isNum(t.ip2) && t.ip2 >= 43.5 ? 'hi' : '');
   setText('#ipDiff', !isNum(tg) ? '' : '目标 ' + tg.toFixed(1) + ' ℃' + (isNum(m) ? ',现在' + (Math.abs(m - tg) < 0.05 ? '正好在目标上' : (m > tg ? '高 ' : '低 ') + Math.abs(m - tg).toFixed(1) + ' ℃') : ',两只探头都没有读数'));
   const drugHi = al.includes('OVERTEMP_DRUG') ? 'hi' : '', gasHi = al.includes('OVERTEMP_GAS') ? 'hi' : '';
-  val('#syr', t.syr1, 1, drugHi); val('#syr2', t.syr2); val('#line', t.line1, 1, drugHi); val('#line2', t.line2); val('#lineOut', t.lineOut);
+  val('#syr', t.syr1, 1, drugHi); val('#syr2', t.syr2); val('#noz', t.noz1, 1, drugHi); val('#noz2', t.noz2);
   val('#gasEnd', t.gasEnd, 1, gasHi); val('#humOut', t.humOut, 1, gasHi); val('#humPlate', t.humPlate);
   val('#press', L.press, 1, al.includes('PRESS_HIGH') || al.includes('PRESS_LOW') ? 'hi' : '');
-  val('#flow', L.flow); val('#flowSet', L.flowSet);
+  val('#nozP', L.nozP, 0, al.includes('NOZ_BLOCK') ? 'hi' : al.includes('NOZ_LOW') ? 'lo' : '');
+  val('#flow', L.flow);
+  setText('#flowNote', !(L.duty && L.duty.pump > 0) ? '循环泵没有转' : ph === 'NEBULIZE' ? '正在送雾化气,设定 ' + fx(L.nebFlow) : '循环中,设定 ' + fx(L.flowSet));
 
   // 设置:没在编辑时跟着设备当前的值走
-  const cv = {target: L.target, flow: L.flowSet, exposeMin: L.exposeMin};
+  const cv = {target: L.target, flow: L.flowSet, nebFlow: L.nebFlow, exposeMin: L.exposeMin};
   for (const k in SETS) { const e = $(SETS[k].el); if (!dirty[k] && document.activeElement !== e && isNum(cv[k])) e.value = cv[k].toFixed(SETS[k].n); }
   setText('#circState', L.circInExpose ? '开' : '关'); setText('#bCirc', L.circInExpose ? '改为关' : '改为开');
   document.querySelectorAll('[data-set]').forEach(b => { b.disabled = !on; });
@@ -424,10 +440,10 @@ function drawChart() {
   const x = t => ml + (t - t0) / 1800 * pw, y = v => mt + (hi - v) / (hi - lo) * ph;
   let g = '';
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step)
-    g += `<line x1="${ml}" x2="${ml + pw}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)"/><text x="${ml - 8}" y="${y(v) + 5}" text-anchor="end">${v}</text>`;
+    g += `<path d="M${ml} ${y(v)}H${ml + pw}" style="stroke:var(--rule)"/><text x="${ml - 8}" y="${y(v) + 5}" text-anchor="end">${v}</text>`;
   for (let mn = 30; mn >= 0; mn -= 5) {
     const xx = ml + (30 - mn) / 30 * pw;
-    g += `<line x1="${xx}" x2="${xx}" y1="${mt + ph}" y2="${mt + ph + 5}" style="stroke:var(--dim)"/><text x="${xx}" y="${H - 8}" text-anchor="${mn === 30 ? 'start' : mn === 0 ? 'end' : 'middle'}">${mn === 0 ? '现在' : mn + ' 分钟前'}</text>`;
+    g += `<path d="M${xx} ${mt + ph}v5" style="stroke:var(--dim)"/><text x="${xx}" y="${H - 8}" text-anchor="${mn === 30 ? 'start' : mn === 0 ? 'end' : 'middle'}">${mn === 0 ? '现在' : mn + ' 分钟前'}</text>`;
   }
   const path = k => {
     let d = '', prev = null;
@@ -449,11 +465,11 @@ function drawChart() {
     for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 18);
     const over = labs.length ? labs[labs.length - 1].y - (mt + ph) : 0;
     if (over > 0) for (let i = labs.length - 1; i >= 0; i--) { labs[i].y = Math.min(labs[i].y, mt + ph - (labs.length - 1 - i) * 18); }
-    for (const l of labs) g += `<line x1="${ml + pw + 6}" x2="${ml + pw + 22}" y1="${l.y}" y2="${l.y}" style="stroke:${l.c}" stroke-width="3" stroke-dasharray="${l.dash}"/><text class="e" x="${ml + pw + 28}" y="${l.y + 5}">${l.text}</text>`;
+    for (const l of labs) g += `<path d="M${ml + pw + 6} ${l.y}h16" style="stroke:${l.c}" stroke-width="3" stroke-dasharray="${l.dash}"/><text class="e" x="${ml + pw + 28}" y="${l.y + 5}">${l.text}</text>`;
   } else if (!pts.length) {
     g += `<text x="${ml + pw / 2}" y="${mt + ph / 2}" text-anchor="middle">最近 30 分钟没有数据</text>`;
   }
-  g += `<line id="cross" x1="0" x2="0" y1="${mt}" y2="${mt + ph}" style="stroke:var(--fg)" stroke-width="1" visibility="hidden"/>`;
+  g += `<path id="cross" d="M0 ${mt}V${mt + ph}" style="stroke:var(--fg)" stroke-width="1" visibility="hidden"/>`;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = g;   // 只含上面拼出来的数字和固定文字,没有任何人填的内容
   geom = {ml, pw, t0, x};
@@ -466,7 +482,7 @@ function hover(ev) {
   for (const p of pts) if (!best || Math.abs(p.ts - t) < Math.abs(best.ts - t)) best = p;
   if (!best || Math.abs(best.ts - t) > 30) { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); return; }
   const xx = geom.x(best.ts);
-  cross.setAttribute('x1', xx); cross.setAttribute('x2', xx); cross.setAttribute('visibility', 'visible');
+  cross.setAttribute('transform', 'translate(' + xx + ' 0)'); cross.setAttribute('visibility', 'visible');
   tip.textContent = '';
   const head = document.createElement('div');
   head.className = 'dim'; head.textContent = new Date(best.ts * 1000).toLocaleTimeString('zh-CN', {hour12: false}) + ' · ' + (PH_CN[best.ph] || best.ph);
