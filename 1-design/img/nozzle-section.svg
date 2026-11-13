@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 380" role="img" aria-label="喷头剖面:中心毛细管走药液,外圈环形通道走温热气体,在喷口处把药液吹成雾"><style>
+.svgt{font:500 12.5px 'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;fill:#14232b}
+.svgs{font:12px 'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;fill:#5b6b73}
+.box{fill:#ffffff;stroke:#d9e0e3;stroke-width:1.4}
+.flow{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:7 7;animation:run 1.1s linear infinite}
+.f-gas{stroke:#0f8a8f}.f-drug{stroke:#7a3fa8}
+.ctrl{fill:none;stroke:#5b6b73;stroke-width:1.2;stroke-dasharray:3 4}
+@keyframes run{to{stroke-dashoffset:-14}}
+.mist circle{fill:#7a3fa8;opacity:.55;animation:fall 1.6s ease-in infinite}
+@keyframes fall{from{transform:translateY(0);opacity:.7}to{transform:translateY(46px);opacity:0}}
+</style><rect width="100%" height="100%" fill="#ffffff"/>
+        <!-- 喷头杆 -->
+        <path d="M100 20 V250 L136 296 H164 L200 250 V20" fill="#f4f6f7" stroke="#14232b" stroke-width="2"/>
+        <path d="M110 20 V246 L140 284 H160 L190 246 V20" fill="#ffffff" stroke="#d9e0e3" stroke-width="1"/>
+        <!-- 气体 -->
+        <path class="flow f-gas" d="M124 30 V240 L146 270"/>
+        <path class="flow f-gas" d="M176 30 V240 L154 270"/>
+        <!-- 旋流片 -->
+        <rect x="111" y="196" width="78" height="10" fill="#5b6b73" opacity=".45"/>
+        <!-- 毛细管 -->
+        <rect x="145" y="14" width="10" height="290" fill="#ffffff" stroke="#7a3fa8" stroke-width="1.6"/>
+        <path class="flow f-drug" d="M150 20 V296" style="stroke-width:3"/>
+        <!-- 雾 -->
+        <path d="M150 304 L92 372 H208 Z" fill="#7a3fa8" opacity=".12"/>
+        <g class="mist"><circle cx="150" cy="312" r="2.4"/><circle cx="136" cy="318" r="2" style="animation-delay:.3s"/><circle cx="164" cy="316" r="2" style="animation-delay:.6s"/><circle cx="124" cy="326" r="1.8" style="animation-delay:.9s"/><circle cx="176" cy="324" r="1.8" style="animation-delay:1.2s"/><circle cx="150" cy="330" r="1.6" style="animation-delay:.15s"/></g>
+        <!-- 标注 -->
+        <text class="svgt" x="208" y="40">温热 CO₂</text><text class="svgs" x="208" y="56">走外圈</text>
+        <text class="svgt" x="8" y="40">药液</text><text class="svgs" x="8" y="56">走中心毛细管</text>
+        <path d="M58 46 H143" stroke="#5b6b73" stroke-width=".8"/>
+        <text class="svgs" x="208" y="205">定心旋流片</text><path d="M206 201 H190" stroke="#5b6b73" stroke-width=".8"/>
+        <text class="svgs" x="208" y="290">喷口 φ2.0</text><path d="M206 286 H168" stroke="#5b6b73" stroke-width=".8"/>
+        <text class="svgs" x="8" y="292">气流约</text><text class="svgs" x="8" y="308">180 m/s</text>
+        <text class="svgt" x="214" y="352">药雾</text>
+      </svg>

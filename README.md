@@ -1,8 +1,35 @@
-# hPIPAC 气助加热雾化系统 · 功能样机 v0.3
+# hPIPAC 气助加热雾化喷头 · 功能样机 v0.3
 
-PIPAC(腹腔加压气溶胶化疗)手术用的加热雾化装置。核心是一只**气助加热雾化喷头**:把循环加热加湿的 CO₂ 当作雾化气,在喷头里和药液汇合喷成雾。同一股气流完成雾化、给腹腔送热和搅动腹腔气体三件事,目标是把腹腔内温度带到 41–43 ℃。手术室外有一个遥控控制台。
+腹腔加压气溶胶化疗(PIPAC)用的加热雾化装置。用循环的温热 CO₂ 当雾化气,在喷头里把药液吹成雾。同一股气流完成三件事:**把药打成雾、把热带进腹腔、搅动腹腔里的气体**。目标是让腹腔在喷药时处于 41–43 ℃。
 
-**这是功能样机,只能用水或生理盐水在模型腹腔上测试。不能用于病人,不能接化疗药。** 它没有医疗器械注册证;喷头的雾化性能、加热效果、药物损失都只有估算,没有仿真和实测。走向临床的路线见[设计方案第 9 节](1-design/README.md)。
+> **这是台架样机,只用水和模型腹腔测试,不用于病人,不接化疗药。** 喷头的雾化效果、加热效果、药物损失都还没有实测。
+
+## 👉 先看这个:[打开演示页](https://claude.ai/artifact/T4B4p6EC1xXtpfdXeMCwUR)
+
+不用安装任何东西,点开就能:看原理动画、拖动旋转三维模型、按按钮模拟一次完整手术(包括喷头堵塞时的报警)。演示页需要先在 claude.ai 上共享给你才能打开。
+
+## 它怎么工作
+
+<p><img src="1-design/img/system.svg" alt="系统回路图" width="640"></p>
+
+药液从左上的注射泵进喷头;温热的 CO₂ 在右边一圈回路里循环:从腹腔抽出、过滤、加热加湿,再从喷头喷回去。
+
+<p><img src="1-design/img/nozzle-section.svg" alt="喷头剖面" width="300"></p>
+
+喷头剖面:药液走中心的不锈钢毛细管,温热 CO₂ 走外圈,在喷口以约 180 m/s 的速度把药液撕成雾。药液只接触毛细管,不需要高压注射器。
+
+## 在 GitHub 上直接转动三维模型
+
+点下面的文件,GitHub 会显示一个可以拖动旋转的三维视图:
+
+| 模型 | 文件 |
+| --- | --- |
+| 气助雾化喷头(喷嘴头、旋流片、喷头杆、毛细管、歧管) | [nozzle_assembly.stl](3-mechanical/models/view/nozzle_assembly.stl) |
+| 手术室整体布置(示意) | [room_assembly.stl](3-mechanical/models/view/room_assembly.stl) |
+| 加湿加热底座 | [hum_assembly.stl](3-mechanical/models/view/hum_assembly.stl) |
+| 注射筒加热套 | [syr_assembly.stl](3-mechanical/models/view/syr_assembly.stl) |
+
+单个零件的加工模型在 [3-mechanical/models/](3-mechanical/models/),图纸在 [HP-drawings.pdf](3-mechanical/drawings/HP-drawings.pdf)(GitHub 上点开就能翻页看)。
 
 ## 按步骤做
 
@@ -48,6 +75,7 @@ PIPAC(腹腔加压气溶胶化疗)手术用的加热雾化装置。核心是一�
 | [5-firmware/](5-firmware/) | ESP32 固件 |
 | [6-software/](6-software/) | 服务器、遥控控制台、主机触摸屏页面、设备模拟器 |
 | [7-testing/](7-testing/) | 分步测试、已知风险 |
+| [demo/](demo/) | 演示页的源文件(在线版见上面的链接) |
 
 ## 不用硬件先看效果
 
