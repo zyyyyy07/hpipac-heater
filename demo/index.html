@@ -123,6 +123,63 @@ th{font-size:13px;color:var(--muted);font-weight:500}
 .yes{color:var(--ok);font-weight:700;white-space:nowrap}.no{color:var(--warn);font-weight:700;white-space:nowrap}
 a{color:var(--accent)}
 footer{font-size:13px;color:var(--muted);display:grid;gap:4px}
+
+[hidden]{display:none!important}
+/* 主机面板:盖板是实物,配色固定,不随主题 */
+.rig{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:16px;align-items:start}
+@media (max-width:860px){.rig{grid-template-columns:1fr}}
+.lid{background:#3d8a9c;border-radius:18px;padding:3.2% 3.6% 2.2%;box-shadow:inset 0 0 0 2px #2c6b7a,0 8px 24px rgba(0,0,0,.25);display:grid;gap:14px;min-width:0}
+.bezel{background:#05090b;border-radius:6px;padding:10px;box-shadow:0 0 0 3px #10262c}
+.scrbox{position:relative;width:100%;aspect-ratio:800/480;overflow:hidden;border-radius:2px}
+.scr{position:absolute;left:0;top:0;width:800px;height:480px;transform-origin:0 0;background:#0d1519;color:#e6f0f2;font:16px/1.4 var(--f-body);display:grid;grid-template-rows:52px 1fr}
+.scr .num{font-family:var(--f-num)}
+.sbar{display:flex;align-items:center;gap:14px;padding:0 16px;background:#13222a;border-bottom:1px solid #22363f}
+.sbar .ph{font:700 24px var(--f-disp)}
+.sbar .dots{display:flex;gap:5px}.sbar .dots i{width:9px;height:9px;border-radius:50%;background:#2a3f48}.sbar .dots i.d{background:#5f8f99}.sbar .dots i.o{background:#5cc2c9;box-shadow:0 0 0 3px rgba(92,194,201,.25)}
+.sbar .tm{margin-left:auto;font:500 22px var(--f-num)}
+.sbar .tabs{display:flex;gap:4px}
+.sbar .tabs button{font:500 15px var(--f-body);background:transparent;color:#93a6ae;border:1px solid #2a3f48;border-radius:6px;padding:4px 12px;cursor:pointer}
+.sbar .tabs button[aria-pressed="true"]{color:#e6f0f2;border-color:#5cc2c9}
+.sbody{display:grid;grid-template-columns:270px 1fr;gap:12px;padding:12px 14px;min-height:0}
+.scol{display:grid;grid-template-rows:auto 1fr auto auto;gap:10px;min-height:0}
+.cavity{background:#13222a;border-radius:8px;padding:10px 14px}
+.cavity .l{font-size:14px;color:#93a6ae}.cavity .v{font:500 64px/1.05 var(--f-num);color:#f07a4f}.cavity .s{font-size:13.5px;color:#93a6ae}
+.hint{font-size:14px;color:#b6c6cc;line-height:1.45;overflow:hidden}
+.sbtn{font:700 20px var(--f-body);border:0;border-radius:8px;padding:14px;cursor:pointer;background:#5cc2c9;color:#062126}
+.sbtn:disabled{opacity:.35;cursor:default}
+.sbtn.ab{background:transparent;border:2px solid #f26c5f;color:#f26c5f;padding:9px;font-size:18px}
+.sconf{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sconf .sbtn{font-size:17px;padding:11px}.sconf .no{background:#2a3f48;color:#e6f0f2}
+.chs{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:10px;min-height:0}
+.ch{background:#13222a;border-radius:8px;padding:9px 12px;display:grid;gap:2px;align-content:start}
+.ch .l{font-size:14px;color:#93a6ae;display:flex;justify-content:space-between}
+.ch .v{font:500 30px/1.15 var(--f-num)}.ch .v small{font-size:15px;color:#93a6ae;margin-left:3px}
+.ch .bar{height:6px;border-radius:3px;background:#22363f;overflow:hidden;margin-top:4px}.ch .bar i{display:block;height:100%;background:#f07a4f}
+.ch .s{font-size:13px;color:#93a6ae}
+.salarm{position:absolute;left:0;right:0;bottom:0;padding:7px 16px;font-size:15px;display:flex;gap:12px;align-items:center;background:#13222a;border-top:1px solid #22363f}
+.salarm .hi{color:#f26c5f;font-weight:700}.salarm .mid{color:#e5ad4a;font-weight:700}.salarm .ok{color:#4cc27f}
+.sstop{position:absolute;inset:52px 0 auto 0;background:#c8322b;color:#fff;padding:16px 20px;display:none;gap:4px}
+.sstop.show{display:grid}.sstop b{font:700 34px var(--f-disp)}.sstop span{font-size:17px}
+.schart{padding:10px 14px;display:none}.schart canvas{width:100%;height:100%;display:block}
+.scr.curve .sbody{display:none}.scr.curve .schart{display:block}
+.hw{display:flex;align-items:center;gap:4%;padding:0 2%}
+.led{width:22px;height:22px;border-radius:50%;background:#1d3238;box-shadow:inset 0 0 0 2px #10262c;flex:none}
+.led.r.on{background:#ff4b3a;box-shadow:0 0 16px 5px rgba(255,75,58,.8)}.led.y.on{background:#ffc531;box-shadow:0 0 16px 5px rgba(255,197,49,.75)}.led.g.on{background:#3fe07f;box-shadow:0 0 16px 5px rgba(63,224,127,.7)}
+.ledcap{font-size:12px;color:#e3f3f6;text-align:center}
+.hwk{display:grid;justify-items:center;gap:4px}
+.key{border:0;border-radius:50%;cursor:pointer;font:700 14px var(--f-body);box-shadow:inset 0 0 0 4px rgba(0,0,0,.3),0 3px 0 #10262c}
+.key:active{transform:translateY(2px);box-shadow:inset 0 0 0 4px rgba(0,0,0,.3)}
+.key.stopk{width:72px;height:72px;background:#d8473a;color:#fff}.key.mutek{width:56px;height:56px;background:#e4e9eb;color:#223}
+.buzz{width:52px;height:52px;border-radius:50%;background:repeating-linear-gradient(90deg,#16262b 0 3px,#2c4047 3px 7px);box-shadow:inset 0 0 0 3px #10262c}
+.buzz.on{animation:ring .4s ease-in-out infinite alternate}
+@keyframes ring{to{box-shadow:inset 0 0 0 3px #10262c,0 0 0 9px rgba(255,197,49,.55)}}
+@media (prefers-reduced-motion:reduce){.buzz.on{animation:none;box-shadow:inset 0 0 0 3px #10262c,0 0 0 6px rgba(255,197,49,.55)}}
+.side{display:grid;gap:14px}
+.side .box2{padding:14px;display:grid;gap:10px}
+.side h3{font-size:15px}
+.side .row{display:flex;flex-wrap:wrap;gap:6px}
+.side dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:13.5px}
+.side dt{font-weight:700;white-space:nowrap}.side dd{margin:0;color:var(--muted)}
 </style>
 
 <div class="wrap">
@@ -137,7 +194,7 @@ footer{font-size:13px;color:var(--muted);display:grid;gap:4px}
     <div class="fact panel"><span class="muted">推药方式</span><b>普通注射泵</b><span class="muted" style="font-size:13px">不需要高压注射器</span></div>
   </div>
   <nav class="jump" aria-label="页面目录">
-    <a href="#how">它怎么工作</a><a href="#model">三维模型</a><a href="#demo">模拟一次手术</a><a href="#status">现在到哪一步</a>
+    <a href="#how">它怎么工作</a><a href="#model">三维模型</a><a href="#demo">主机操作面板</a><a href="#status">现在到哪一步</a>
   </nav>
 </header>
 
@@ -181,8 +238,7 @@ footer{font-size:13px;color:var(--muted);display:grid;gap:4px}
         <text class="svgt" x="108" y="172" text-anchor="middle">主机 + 触摸屏</text>
         <text class="svgs" x="108" y="190" text-anchor="middle">四路加热、保护、计时</text>
         <path class="ctrl" d="M108 150 V74 M192 170 H282 M192 186 H470"/>
-        <text class="svgs" x="108" y="228" text-anchor="middle">手术室外有遥控控制台</text>
-        <!-- 图例 -->
+                <!-- 图例 -->
         <g transform="translate(24,346)"><line x1="0" y1="0" x2="22" y2="0" stroke="var(--drug)" stroke-width="3.2"/><text class="svgs" x="28" y="4">药液</text>
         <line x1="70" y1="0" x2="92" y2="0" stroke="var(--gas)" stroke-width="3.2"/><text class="svgs" x="98" y="4">温热 CO₂</text>
         <line x1="166" y1="0" x2="188" y2="0" stroke="var(--muted)" stroke-dasharray="3 4"/><text class="svgs" x="194" y="4">控制和测量</text></g>
@@ -248,50 +304,60 @@ footer{font-size:13px;color:var(--muted);display:grid;gap:4px}
 </section>
 
 <section id="demo">
-  <div class="eyebrow">模拟一次手术</div>
-  <h2>点按钮走一遍:预热、就绪、喷雾、暴露、排气</h2>
-  <p class="muted">这是手术室外遥控控制台的简化版,背后是一台模拟设备。温度变化用的是我编的简单模型,只用来看流程,不代表真实设备的升温速度。</p>
-  <div class="console panel">
-    <div class="steps" id="steps"></div>
-    <div class="stop" id="stop" role="alert"><b>立即停止注射泵</b><span>雾化气已经停了,药液会不成雾、直接滴进腹腔。先停注射泵,再处理下面的报警。</span></div>
-    <div class="alarms" id="alarms"></div>
-    <div class="grid">
-      <div class="phase panel">
-        <span class="muted" style="font-size:13px">当前阶段</span>
-        <div class="name" id="phName">待机</div>
-        <div class="clock num" id="clock">00:00</div>
-        <div class="what" id="what"></div>
-        <button class="btn" id="main" type="button">开始预热</button>
-        <button class="btn ghost" id="abort" type="button">中止</button>
-        <div class="confirm" id="confirm"><button class="btn ghost" id="abortYes" type="button">确认中止</button><button class="btn small" id="abortNo" type="button">不中止</button></div>
+  <div class="eyebrow">主机操作面板</div>
+  <h2>现场操作:触摸屏、指示灯、中止键</h2>
+  <p class="muted">下面是主控盒正面按 1:1 比例画的盖板,屏幕里就是 7 英寸触摸屏(800×480)的界面,可以直接点。背后是一台模拟设备,温度变化用的是我编的简单模型,只用来看流程,不代表真实设备的升温速度。</p>
+  <div class="rig">
+    <div class="lid" aria-label="主控盒盖板">
+      <div class="bezel"><div class="scrbox" id="scrbox">
+        <div class="scr" id="scr">
+          <div class="sbar"><span class="ph" id="phName">预热</span><span class="dots" id="dots"></span>
+            <span class="tabs"><button id="tabMain" aria-pressed="true">概览</button><button id="tabCurve" aria-pressed="false">曲线</button></span>
+            <span class="tm" id="clock">00:00</span></div>
+          <div class="sbody">
+            <div class="scol">
+              <div class="cavity"><div class="l">腹腔温度</div><div class="v" id="ip">36.5</div><div class="s" id="ipSub">目标 42.0 ℃</div></div>
+              <div class="hint" id="what"></div>
+              <button class="sbtn" id="main" type="button">开始预热</button>
+              <button class="sbtn ab" id="abort" type="button">中止</button>
+              <div class="sconf" id="confirm" hidden><button class="sbtn ab" id="abortYes" type="button">确认中止</button><button class="sbtn no" id="abortNo" type="button">不中止</button></div>
+            </div>
+            <div class="chs">
+              <div class="ch"><span class="l">针筒药液<span id="dSyr">0%</span></span><span class="v" id="syr">22.0<small>℃</small></span><span class="s">设定 42.0 · 上限 43.0</span><span class="bar"><i id="bSyr"></i></span></div>
+              <div class="ch"><span class="l">喷头歧管<span id="dNoz">0%</span></span><span class="v" id="noz">22.0<small>℃</small></span><span class="s">设定 42.0 · 上限 43.0</span><span class="bar"><i id="bNoz"></i></span></div>
+              <div class="ch"><span class="l">喷头端气温<span id="dGas">0%</span></span><span class="v" id="gas">22.0<small>℃</small></span><span class="s" id="humSub">加湿罐出口 22.0 ℃</span><span class="bar"><i id="bGas"></i></span></div>
+              <div class="ch"><span class="l">腹腔压力</span><span class="v" id="press">0.0<small>mmHg</small></span><span class="s">低于 6 或高于 18 报警</span></div>
+              <div class="ch"><span class="l">雾化气压</span><span class="v" id="nozP">0<small>kPa</small></span><span class="s">150 以上判喷头堵塞</span></div>
+              <div class="ch"><span class="l">循环流量</span><span class="v" id="flow">0.0<small>L/min</small></span><span class="s" id="pumpSub">循环泵停</span></div>
+            </div>
+          </div>
+          <div class="schart"><canvas id="chart" aria-label="温度曲线"></canvas></div>
+          <div class="sstop" id="stop" role="alert"><b>立即停止注射泵</b><span>雾化气已经停了,药液会不成雾、直接滴进腹腔。先停注射泵,再处理报警。</span></div>
+          <div class="salarm" id="alarms"></div>
+        </div>
+      </div></div>
+      <div class="hw">
+        <div class="hwk"><span class="led r" id="lr"></span><span class="ledcap">报警</span></div>
+        <div class="hwk"><span class="led y" id="ly"></span><span class="ledcap">注意</span></div>
+        <div class="hwk"><span class="led g" id="lg"></span><span class="ledcap">运行</span></div>
+        <div class="hwk" style="margin-left:auto"><button class="key stopk" id="kStop" type="button">中止</button><span class="ledcap">实体中止键</span></div>
+        <div class="hwk"><button class="key mutek" id="kMute" type="button">消音</button><span class="ledcap">消音键</span></div>
+        <div class="hwk"><span class="buzz" id="buzz"></span><span class="ledcap">蜂鸣器</span></div>
       </div>
-      <div class="tiles">
-        <div class="tile panel cav"><span class="l" style="grid-column:1/-1">腹腔温度(两只探头平均)</span><span class="v" id="ip">36.5</span><span class="s" id="ipSub">目标 42.0 ℃</span></div>
-        <div class="tile panel"><span class="l">针筒药液</span><span class="v" id="syr">22.0<small>℃</small></span><span class="s">加热套 ≤43 ℃</span></div>
-        <div class="tile panel"><span class="l">喷头歧管</span><span class="v" id="noz">22.0<small>℃</small></span><span class="s">≤43 ℃</span></div>
-        <div class="tile panel"><span class="l">喷头端气温</span><span class="v" id="gas">22.0<small>℃</small></span><span class="s" id="humSub">加湿罐出口 22.0 ℃</span></div>
-        <div class="tile panel"><span class="l">腹腔压力</span><span class="v" id="press">0.0<small>mmHg</small></span><span class="s">报警线 6 / 18</span></div>
-        <div class="tile panel"><span class="l">雾化气压</span><span class="v" id="nozP">0<small>kPa</small></span><span class="s">堵塞报警 150</span></div>
-        <div class="tile panel"><span class="l">循环流量</span><span class="v" id="flow">0.0<small>L/min</small></span><span class="s" id="pumpSub">循环泵停</span></div>
+    </div>
+    <div class="side">
+      <div class="box2 panel"><h3>模拟控制</h3>
+        <div class="row"><button class="seg" data-speed="1" aria-pressed="false">实时</button><button class="seg" data-speed="20" aria-pressed="false">20 倍</button><button class="seg" data-speed="60" aria-pressed="true">60 倍</button></div>
+        <div class="row"><button class="btn small" id="fBlock" type="button">模拟喷头堵塞</button><button class="btn small" id="fLeak" type="button">模拟回路漏气</button><button class="btn small" id="fHot" type="button">模拟腹腔过温</button></div>
+        <div class="row"><button class="btn small" id="ack" type="button">确认报警(故障排除)</button><button class="btn small" id="reset" type="button">重新开始</button></div>
+        <p class="note">试试:走到“喷雾”阶段后点“模拟喷头堵塞”,屏幕最上方会出现“立即停止注射泵”,红灯快闪,蜂鸣器响。</p>
+      </div>
+      <div class="box2 panel"><h3>指示灯和按键</h3>
+        <dl><dt>红灯快闪</dt><dd>高级报警,相关加热或循环泵已自动停</dd><dt>黄灯常亮</dt><dd>中级报警,提示</dd><dt>绿灯常亮</dt><dd>就绪、喷雾、暴露</dd><dt>绿灯慢闪</dt><dd>预热中</dd>
+        <dt>中止键</dt><dd>按下立即停加热和泵,不需要确认</dd><dt>消音键</dt><dd>静音当前报警,新报警会再响</dd></dl>
+        <p class="note">指示灯、蜂鸣器、两个实体键直接接安全主控,触摸屏黑屏也照常工作。</p>
       </div>
     </div>
-    <div class="chartbox panel">
-      <span class="muted" style="font-size:13px">温度曲线(最近 60 分钟)</span>
-      <canvas id="chart" aria-label="温度曲线"></canvas>
-    </div>
-    <div class="tools">
-      <span class="lab">速度</span>
-      <button class="seg" data-speed="1" aria-pressed="false">实时</button>
-      <button class="seg" data-speed="20" aria-pressed="false">20 倍</button>
-      <button class="seg" data-speed="60" aria-pressed="true">60 倍</button>
-      <span class="lab" style="margin-left:12px">模拟故障</span>
-      <button class="btn small" id="fBlock" type="button">喷头堵塞</button>
-      <button class="btn small" id="fLeak" type="button">回路漏气</button>
-      <button class="btn small" id="fHot" type="button">腹腔过温</button>
-      <button class="btn small" id="ack" type="button">确认报警</button>
-      <button class="btn small" id="reset" type="button">重新开始</button>
-    </div>
-    <p class="note">提示:喷雾阶段点“喷头堵塞”,可以看到循环泵停下后最醒目的“立即停止注射泵”提示。</p>
   </div>
 </section>
 
@@ -305,7 +371,7 @@ footer{font-size:13px;color:var(--muted);display:grid;gap:4px}
         <tr><td>设计方案、文献依据、热量估算</td><td class="yes">完成</td><td>文献只读了摘要,数值引用前需核对原文</td></tr>
         <tr><td>三维模型和 8 张加工图纸</td><td class="yes">完成</td><td>没有经过加工厂审图,没有加工过</td></tr>
         <tr><td>主机固件(加热、报警、阶段控制)</td><td class="yes">完成</td><td>电脑上 256 项逻辑测试通过;没有在硬件上运行过</td></tr>
-        <tr><td>遥控控制台和服务器</td><td class="yes">完成</td><td>116 项全流程测试通过,只连过模拟设备</td></tr>
+        <tr><td>主机触摸屏界面和服务器</td><td class="yes">完成</td><td>116 项全流程测试通过,只连过模拟设备</td></tr>
         <tr><td>喷头能不能成雾、雾滴多大</td><td class="no">未知</td><td>只有经验公式粗估(约 30 µm),要做出喷头实测</td></tr>
         <tr><td>有多少药被回气带走</td><td class="no">未知</td><td>这是方案成立的关键,要称过滤器增重实测</td></tr>
         <tr><td>腹腔能升到多少度、要多久</td><td class="no">未知</td><td>文献里同类做法是 39–42 ℃,要在模型腹腔上实测</td></tr>
@@ -369,47 +435,42 @@ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim
   (function loop(){requestAnimationFrame(loop);ctl.update();r.render(scene,cam)})();
 })();
 
-/* ---------------- 手术演示 ---------------- */
+/* ---------------- 主机面板演示 ---------------- */
 const PH=['PREHEAT','READY','NEBULIZE','EXPOSE','EVAC','DONE'];
 const PH_CN={IDLE:'待机',PREHEAT:'预热',READY:'就绪',NEBULIZE:'喷雾',EXPOSE:'暴露',EVAC:'排气',DONE:'结束'};
 const WHAT={
   IDLE:'加热和循环泵都没开。按“开始预热”后四路加热启动。',
   PREHEAT:'针筒、喷头歧管、加湿罐升温。气腹建立(压力到 8 mmHg)后循环泵开始转,把热气送进腹腔。各项到温后自动进入就绪。',
-  READY:'各项到温,人员可以离开手术室。按“开始喷雾”后,循环泵改用雾化气流量。',
-  NEBULIZE:'循环泵正在当雾化气源。在室外启动注射泵推药;推完后按“喷雾结束”。',
-  EXPOSE:'药雾停留 30 分钟。药液侧加热已关,气体侧保温;默认不循环,免得把药雾滤掉。',
+  READY:'各项到温。按“开始喷雾”后循环泵改用雾化气流量,再启动注射泵推药。',
+  NEBULIZE:'循环泵正在当雾化气源。启动注射泵推药;推完后按“喷雾结束”。',
+  EXPOSE:'药雾停留 30 分钟。药液侧加热已关,气体侧保温,默认不循环。',
   EVAC:'经密闭排气系统排空气腹。加热和泵全部关闭。',
   DONE:'本次结束。按“回到待机”。'};
-const AL={NOZ_BLOCK:['喷头堵塞','hi','循环泵已停。检查喷口和输气管有没有堵或打折。'],PRESS_LOW:['腹腔压力过低','hi','循环泵已停。可能漏气,检查穿刺器和管路接头。'],
-  IP_HIGH:['腹腔过温','hi','全部加热和循环泵已停。降到 42.5 ℃ 以下并确认后才能继续。'],EXPOSE_END:['暴露时间到','mid','已转入排气阶段。']};
-const T=42,AMB=22;let S,speed=60,hist=[];
-function fresh(){S={ph:'IDLE',phT:0,t:0,syr:AMB,noz:AMB,humOut:AMB,gas:AMB,ip:36.5,press:0,pump:false,flow:0,nozP:0,expLeft:-1,al:new Set(),f:{block:false,leak:false,hot:false},estab:false};hist=[];confirmAbort(false)}
+const AL={NOZ_BLOCK:['喷头堵塞','hi','循环泵已停,检查喷口和输气管'],PRESS_LOW:['腹腔压力过低','hi','循环泵已停,检查穿刺器和接头'],
+  IP_HIGH:['腹腔过温','hi','全部加热和循环泵已停'],EXPOSE_END:['暴露时间到','mid','已转入排气']};
+const T=42,AMB=22;let S,speed=60,hist=[],muted=new Set(),curve=false;
+function fresh(){S={ph:'IDLE',phT:0,t:0,syr:AMB,noz:AMB,humOut:AMB,gas:AMB,ip:36.5,press:0,pump:false,flow:0,nozP:0,expLeft:-1,al:new Set(),f:{block:false,leak:false,hot:false},estab:false,on:{}};hist=[];muted=new Set();confirmAbort(false)}
 const ap=(x,y,tau,dt)=>x+(y-x)*(1-Math.exp(-dt/tau));
-const ipMean=()=>S.ip;
-function go(ph){S.ph=ph;S.phT=0;if(ph==='EXPOSE')S.expLeft=30*60;if(ph!=='EXPOSE')S.expLeft=-1;if(ph==='PREHEAT')S.estab=false}
+function go(ph){S.ph=ph;S.phT=0;S.expLeft=ph==='EXPOSE'?30*60:-1;if(ph==='PREHEAT')S.estab=false}
 function step(dt){
   S.t+=dt;S.phT+=dt;const p=S.ph,live=['PREHEAT','READY','NEBULIZE','EXPOSE'].includes(p);
   const hot=S.al.has('IP_HIGH');
-  const onDrug=!hot&&['PREHEAT','READY','NEBULIZE'].includes(p),onGas=!hot&&live;
-  // 气腹
+  const onDrug=!hot&&['PREHEAT','READY','NEBULIZE'].includes(p),onGas=!hot&&live;S.on={drug:onDrug,gas:onGas};
   let pt=0;if(live){pt=(p==='PREHEAT'&&S.phT<60&&!S.estab)?0:12;if(S.f.leak)pt=3}
   S.press=ap(S.press,pt,p==='EVAC'?20:12,dt);if(S.press>=8)S.estab=true;
-  // 泵
-  let want=(['PREHEAT','READY'].includes(p)&&S.estab)||p==='NEBULIZE';
+  const want=(['PREHEAT','READY'].includes(p)&&S.estab)||p==='NEBULIZE';
   const stopBy=['NOZ_BLOCK','PRESS_LOW','IP_HIGH'].some(a=>S.al.has(a));
   S.pump=want&&!stopBy;S.flow=S.pump?(p==='NEBULIZE'?12:10):0;
   S.nozP=S.pump?(S.f.block?185:0.45*S.flow*S.flow):0;
   if(S.nozP>=150)S.al.add('NOZ_BLOCK');
   if(S.pump&&S.press<6&&S.phT>5)S.al.add('PRESS_LOW');
-  // 温度
   S.syr=ap(S.syr,onDrug?T:AMB,onDrug?700:1800,dt);
   S.noz=ap(S.noz,onDrug?T:AMB+2,onDrug?110:500,dt);
   S.humOut=ap(S.humOut,onGas?(S.pump?T+1:T-4):AMB,240,dt);
   S.gas=ap(S.gas,onGas&&S.pump?Math.min(S.humOut,T):(onGas?T-4:AMB),90,dt);
-  if(S.f.hot){S.ip=Math.max(S.ip,43.7)}else S.ip=ap(S.ip,S.pump?S.gas-0.4:37,S.pump?1300:4200,dt);
+  if(S.f.hot)S.ip=Math.max(S.ip,43.7);else S.ip=ap(S.ip,S.pump?S.gas-0.4:37,S.pump?1300:4200,dt);
   if(S.ip>=43.5)S.al.add('IP_HIGH');
-  // 阶段
-  if(p==='PREHEAT'&&ready()&&ipMean()>=T-1)go('READY');
+  if(p==='PREHEAT'&&ready()&&S.ip>=T-1)go('READY');
   if(p==='EXPOSE'){S.expLeft-=dt;if(S.expLeft<=0){S.al.add('EXPOSE_END');go('EVAC')}}
 }
 const ready=()=>Math.abs(S.syr-T)<0.5&&Math.abs(S.noz-T)<0.5&&S.gas>=T-1;
@@ -417,53 +478,68 @@ const MAIN={IDLE:['开始预热',()=>go('PREHEAT')],PREHEAT:['手动确认就绪
   NEBULIZE:['喷雾结束,开始计时',()=>go('EXPOSE')],EXPOSE:['提前结束暴露',()=>go('EVAC')],EVAC:['结束手术',()=>go('DONE')],DONE:['回到待机',()=>{S.al.delete('EXPOSE_END');go('IDLE')}]};
 const mmss=s=>{s=Math.max(0,Math.round(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
 const fmt=(el,v,d,u)=>{el.innerHTML=v.toFixed(d)+'<small>'+u+'</small>'};
+const duty=(on,x,set)=>on?Math.max(6,Math.min(100,Math.round((set-x)*45+12))):0;
 function render(){
   const p=S.ph;
-  $('#steps').innerHTML=PH.map((k,i)=>{const at=PH.indexOf(p);return `<div class="step ${k===p?'on':(at>i?'done':'')}">${PH_CN[k]}</div>`}).join('');
+  $('#dots').innerHTML=PH.map((k,i)=>{const at=PH.indexOf(p);return `<i class="${k===p?'o':(at>i?'d':'')}" title="${PH_CN[k]}"></i>`}).join('');
   $('#phName').textContent=PH_CN[p];
-  const c=$('#clock');if(p==='EXPOSE'){c.textContent=mmss(S.expLeft);c.classList.add('big')}else{c.textContent=mmss(S.phT);c.classList.remove('big')}
+  $('#clock').textContent=p==='EXPOSE'?'剩余 '+mmss(S.expLeft):mmss(S.phT);
   $('#what').textContent=WHAT[p];
   const m=MAIN[p],b=$('#main');b.textContent=m[0];b.disabled=m[2]?!m[2]():false;
-  $('#abort').disabled=!['PREHEAT','READY','NEBULIZE','EXPOSE'].includes(p);
-  $('#ip').textContent=ipMean().toFixed(1);
-  const gap=T-ipMean();$('#ipSub').textContent=`目标 ${T.toFixed(1)} ℃ · `+(gap>0.05?`还差 ${gap.toFixed(1)} ℃`:'已到目标')+` · 探头 ${(S.ip+0.15).toFixed(1)} / ${(S.ip-0.25).toFixed(1)}`;
+  const live=['PREHEAT','READY','NEBULIZE','EXPOSE'].includes(p);$('#abort').disabled=!live;
+  $('#ip').textContent=S.ip.toFixed(1);
+  const gap=T-S.ip;$('#ipSub').textContent=`目标 ${T.toFixed(1)} ℃ · `+(gap>0.05?`差 ${gap.toFixed(1)} ℃`:'已到目标');
   fmt($('#syr'),S.syr,1,'℃');fmt($('#noz'),S.noz,1,'℃');fmt($('#gas'),S.gas,1,'℃');$('#humSub').textContent='加湿罐出口 '+S.humOut.toFixed(1)+' ℃';
+  const ds=duty(S.on.drug,S.syr,T),dn=duty(S.on.drug,S.noz,T),dg=duty(S.on.gas&&S.pump,S.gas,T);
+  $('#dSyr').textContent=ds+'%';$('#bSyr').style.width=ds+'%';$('#dNoz').textContent=dn+'%';$('#bNoz').style.width=dn+'%';$('#dGas').textContent=dg+'%';$('#bGas').style.width=dg+'%';
   fmt($('#press'),S.press,1,'mmHg');fmt($('#nozP'),S.nozP,0,'kPa');fmt($('#flow'),S.flow,1,'L/min');
   $('#pumpSub').textContent=S.pump?(p==='NEBULIZE'?'正在当雾化气':'正在循环加热'):'循环泵停';
-  const stop=p==='NEBULIZE'&&!S.pump;$('#stop').classList.toggle('show',stop);
-  const al=[...S.al];$('#alarms').innerHTML=al.length?al.map(a=>`<span class="pill ${AL[a][1]}">${AL[a][0]}</span><span class="note">${AL[a][2]}</span>`).join(''):'<span class="pill ok">无报警</span>';
-  drawChart();
+  $('#stop').classList.toggle('show',p==='NEBULIZE'&&!S.pump);
+  const al=[...S.al];
+  $('#alarms').innerHTML=al.length?al.map(a=>`<span class="${AL[a][1]}">${AL[a][0]}</span><span>${AL[a][2]}</span>`).join(''):'<span class="ok">无报警</span>';
+  if(curve)drawChart();
+}
+function leds(){
+  if(!S)return;const now=Date.now(),al=[...S.al],hi=al.some(a=>AL[a][1]==='hi'),mid=al.some(a=>AL[a][1]==='mid');
+  const fast=Math.floor(now/200)%2===0,slow=Math.floor(now/600)%2===0;
+  $('#lr').classList.toggle('on',hi&&fast);$('#ly').classList.toggle('on',!hi&&mid);
+  $('#lg').classList.toggle('on',['READY','NEBULIZE','EXPOSE'].includes(S.ph)||(S.ph==='PREHEAT'&&slow));
+  $('#buzz').classList.toggle('on',al.some(a=>!muted.has(a)));
 }
 function drawChart(){
-  const cv=$('#chart'),w=cv.clientWidth,h=cv.clientHeight,dpr=Math.min(devicePixelRatio,2);if(!w)return;
-  if(cv.width!==w*dpr){cv.width=w*dpr;cv.height=h*dpr}
+  const cv=$('#chart'),w=cv.clientWidth,h=cv.clientHeight,dpr=2;if(!w)return;
+  if(cv.width!==w*dpr||cv.height!==h*dpr){cv.width=w*dpr;cv.height=h*dpr}
   const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
-  const L=36,R=96,Tp=8,B=24,x0=S.t-3600,lo=20,hi=45;
+  const L=34,R=110,Tp=10,B=26,x0=S.t-3600,lo=20,hi=45;
   const X=t=>L+(t-x0)/3600*(w-L-R),Y=v=>Tp+(hi-v)/(hi-lo)*(h-Tp-B);
-  g.font='12px '+css('--f-num');g.fillStyle=css('--muted');g.strokeStyle=css('--rule');g.lineWidth=1;
-  for(const v of [20,25,30,35,40,45]){g.beginPath();g.moveTo(L,Y(v));g.lineTo(w-R,Y(v));g.stroke();g.fillText(v,6,Y(v)+4)}
+  g.font='13px '+css('--f-num');g.fillStyle='#93a6ae';g.strokeStyle='#22363f';g.lineWidth=1;
+  for(const v of [20,25,30,35,40,45]){g.beginPath();g.moveTo(L,Y(v));g.lineTo(w-R,Y(v));g.stroke();g.fillText(v,4,Y(v)+4)}
   g.fillText('−60 分钟',L,h-6);g.textAlign='right';g.fillText('现在',w-R,h-6);g.textAlign='left';
-  g.setLineDash([5,5]);g.strokeStyle=css('--muted');g.beginPath();g.moveTo(L,Y(T));g.lineTo(w-R,Y(T));g.stroke();g.setLineDash([]);
-  const series=[['腹腔','ip','--heat'],['喷头端气','gas','--gas'],['针筒药液','syr','--drug']];
-  const ends=[];
-  for(const[n,k,c]of series){g.strokeStyle=css(c);g.lineWidth=2.2;g.beginPath();let first=true,last=null;
+  g.setLineDash([5,5]);g.strokeStyle='#93a6ae';g.beginPath();g.moveTo(L,Y(T));g.lineTo(w-R,Y(T));g.stroke();g.setLineDash([]);
+  const series=[['腹腔','ip','#f07a4f'],['喷头端气','gas','#3cc2c4'],['针筒药液','syr','#b98ae0']],ends=[];
+  for(const[n,k,c]of series){g.strokeStyle=c;g.lineWidth=2.4;g.beginPath();let first=true,last=null;
     for(const pt of hist){if(pt.t<x0)continue;const x=X(pt.t),y=Y(Math.min(hi,Math.max(lo,pt[k])));first?g.moveTo(x,y):g.lineTo(x,y);first=false;last=[x,y,pt[k]]}
     g.stroke();if(last)ends.push([n,c,last])}
-  ends.sort((a,b)=>a[2][1]-b[2][1]);let prev=-99;
-  for(const[n,c,[x,y,v]]of ends){const yy=Math.max(y,prev+15);prev=yy;g.fillStyle=css(c);g.beginPath();g.arc(x,y,3,0,7);g.fill();g.font='12px '+css('--f-body');g.fillText(n+' '+v.toFixed(1),w-R+6,yy+4)}
-  g.fillStyle=css('--muted');g.fillText('目标 '+T,w-R+6,Y(T)-6<prev?Y(T)+14:Y(T)-6);
+  ends.sort((a,b)=>a[2][1]-b[2][1]);let prev=-99;g.font='13px '+css('--f-body');
+  for(const[n,c,[x,y,v]]of ends){const yy=Math.max(y,prev+16);prev=yy;g.fillStyle=c;g.beginPath();g.arc(x,y,3.5,0,7);g.fill();g.fillText(n+' '+v.toFixed(1),w-R+8,yy+4)}
 }
-function confirmAbort(on){$('#confirm').classList.toggle('show',on);$('#abort').hidden=on}
+function fitScreen(){const w=$('#scrbox').clientWidth;$('#scr').style.transform=`scale(${w/800})`}
+new ResizeObserver(fitScreen).observe($('#scrbox'));fitScreen();
+function confirmAbort(on){$('#confirm').hidden=!on;$('#abort').hidden=on}
 $('#main').onclick=()=>{MAIN[S.ph][1]();render()};
 $('#abort').onclick=()=>confirmAbort(true);$('#abortNo').onclick=()=>confirmAbort(false);
 $('#abortYes').onclick=()=>{go('EVAC');confirmAbort(false);render()};
+$('#kStop').onclick=()=>{if(['PREHEAT','READY','NEBULIZE','EXPOSE'].includes(S.ph)){go('EVAC');confirmAbort(false);render()}};
+$('#kMute').onclick=()=>{S.al.forEach(a=>muted.add(a));leds()};
+$('#tabMain').onclick=()=>{curve=false;$('#scr').classList.remove('curve');$('#tabMain').setAttribute('aria-pressed',true);$('#tabCurve').setAttribute('aria-pressed',false)};
+$('#tabCurve').onclick=()=>{curve=true;$('#scr').classList.add('curve');$('#tabCurve').setAttribute('aria-pressed',true);$('#tabMain').setAttribute('aria-pressed',false);drawChart()};
 $('#fBlock').onclick=()=>{S.f.block=true;render()};$('#fLeak').onclick=()=>{S.f.leak=true;render()};$('#fHot').onclick=()=>{S.f.hot=true;render()};
-$('#ack').onclick=()=>{S.f={block:false,leak:false,hot:false};if(S.ip>=42.5)S.ip=42.4;S.al.clear();render()};
+$('#ack').onclick=()=>{S.f={block:false,leak:false,hot:false};if(S.ip>=42.5)S.ip=42.4;S.al.clear();muted.clear();render()};
 $('#reset').onclick=()=>{fresh();render()};
 document.querySelectorAll('[data-speed]').forEach(b=>b.onclick=()=>{speed=+b.dataset.speed;document.querySelectorAll('[data-speed]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
 fresh();
-// 示例起点:让页面一打开就处在预热中段,有曲线可看
 go('PREHEAT');for(let i=0;i<9*60;i++){step(1);if(i%10===0)hist.push({t:S.t,ip:S.ip,gas:S.gas,syr:S.syr})}
 let acc=0;setInterval(()=>{const dt=0.2*speed,n=Math.ceil(dt/2);for(let i=0;i<n;i++)step(dt/n);acc+=dt;if(acc>=10){acc=0;hist.push({t:S.t,ip:S.ip,gas:S.gas,syr:S.syr});if(hist.length>800)hist.splice(0,hist.length-800)}render()},200);
+setInterval(leds,100);
 render();
 </script>
