@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=800,initial-scale=1">
+<title>本机屏 · hPIPAC 加热系统</title>
+<style>
+/* 给主机上的 7 英寸触摸屏用,固定 800×480,不滚动。按钮高度都在 60 px 以上,戴手套也能点。 */
+:root{--bg:#0e1a1f;--card:#162a31;--fg:#e6f1f3;--dim:#8fa7ae;--line:#2a444d;--ok:#3cc17d;--warn:#e7ab2f;--crit:#f0604f;--acc:#49b8cc}
+*{box-sizing:border-box}
+html,body{margin:0;width:800px;height:480px;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font:18px/1.3 "Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;font-variant-numeric:tabular-nums;
+  display:grid;grid-template-rows:56px 40px 1fr 88px;user-select:none;-webkit-user-select:none}
+.dim{color:var(--dim)}
+.top{display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--card)}
+#phName{font-size:32px;font-weight:700}
+#timer{font-size:32px;font-weight:700}
+#tLabel{font-size:16px;color:var(--dim)}
+.sp{flex:1}
+.pill{padding:1px 10px;border-radius:12px;border:1px solid var(--line);color:var(--dim);font-size:16px}
+.pill.on{border-color:var(--ok);color:var(--ok)}.pill.off{background:var(--crit);border-color:var(--crit);color:#fff}
+#strip{display:flex;align-items:center;padding:0 14px;font-size:18px;color:var(--dim);white-space:nowrap;overflow:hidden}
+#strip.high{background:var(--crit);color:#fff;font-weight:700}#strip.mid{background:var(--warn);color:#201500;font-weight:700}
+.mid2{display:grid;grid-template-columns:1fr 250px;gap:10px;padding:8px 10px;min-height:0}
+.ch{display:grid;grid-template-rows:repeat(5,1fr);gap:4px}
+.r{display:grid;grid-template-columns:128px 112px 96px 1fr;align-items:center;gap:8px;background:var(--card);border-radius:6px;padding:0 10px}
+.r .n{font-size:17px}.r b{font-size:30px;text-align:right}.r b small{font-size:14px;color:var(--dim);font-weight:400;margin-left:3px}
+.r .sv{font-size:15px;color:var(--dim)}
+.bar{height:14px;background:#0b1418;border-radius:7px;overflow:hidden;position:relative}
+.bar i{display:block;height:100%;background:var(--acc);width:0}
+.bw{display:grid;grid-template-columns:1fr 44px;gap:6px;align-items:center;font-size:15px;color:var(--dim)}
+.bw span{text-align:right}
+.ip{background:var(--card);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column}
+.ip h2{margin:0;font-size:16px;font-weight:400;color:var(--dim)}
+#ipMean{font-size:72px;font-weight:700;line-height:1.05}
+#ipMean.hi{color:var(--crit)}#ipMean.lo{color:var(--warn)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:15px;color:var(--dim);margin-top:auto}
+.two b{display:block;font-size:24px;color:var(--fg)}
+.bot{display:grid;grid-template-columns:1fr auto auto 150px;gap:10px;padding:0 10px 10px}
+button{font:inherit;font-weight:700;border-radius:8px;border:2px solid var(--acc);background:transparent;color:var(--acc);font-size:20px;padding:0 16px;min-width:96px}
+button:disabled{opacity:.35}
+#bMain{background:var(--acc);color:#04222a;font-size:28px}
+#bMain.arm{background:var(--warn);border-color:var(--warn)}
+#bAbort{border-color:var(--crit);color:var(--crit);font-size:26px}
+#bAbort.arm{background:var(--crit);color:#fff;font-size:20px}
+[hidden]{display:none!important}
+</style></head><body>
+<div class="top">
+  <span id="phName">—</span><span id="tLabel"></span><span id="timer"></span>
+  <span class="sp"></span><span id="devId" class="dim"></span><span id="link" class="pill">正在连接</span>
+</div>
+<div id="strip"></div>
+<div class="mid2">
+  <div class="ch">
+    <div class="r"><span class="n">注射筒</span><b><span id="vSyr">--</span><small>℃</small></b><span class="sv" id="sSyr"></span><div class="bw"><div class="bar"><i id="dSyr"></i></div><span id="pSyr"></span></div></div>
+    <div class="r"><span class="n">高压管</span><b><span id="vLine">--</span><small>℃</small></b><span class="sv" id="sLine"></span><div class="bw"><div class="bar"><i id="dLine"></i></div><span id="pLine"></span></div></div>
+    <div class="r"><span class="n">加湿罐出口</span><b><span id="vHum">--</span><small>℃</small></b><span class="sv" id="sHum"></span><div class="bw"><div class="bar"><i id="dHum"></i></div><span id="pHum"></span></div></div>
+    <div class="r"><span class="n">输气管病人端</span><b><span id="vTube">--</span><small>℃</small></b><span class="sv" id="sTube"></span><div class="bw"><div class="bar"><i id="dTube"></i></div><span id="pTube"></span></div></div>
+    <div class="r"><span class="n">循环泵</span><b><span id="vPump">--</span><small>L/min</small></b><span class="sv" id="sPump"></span><div class="bw"><div class="bar"><i id="dPump"></i></div><span id="pPump"></span></div></div>
+  </div>
+  <div class="ip">
+    <h2>腹腔温度(平均)</h2>
+    <div><span id="ipMean">--</span><span class="dim"> ℃</span></div>
+    <div id="ipTg" class="dim" style="font-size:16px"></div>
+    <div class="two">
+      <div>探头 1<b id="ip1">--</b></div><div>探头 2<b id="ip2">--</b></div>
+      <div>压力 mmHg<b id="press">--</b></div><div>高压管出口<b id="lineOut">--</b></div>
+    </div>
+  </div>
+</div>
+<div class="bot">
+  <button id="bMain" disabled>—</button>
+  <button id="bAck" hidden>确认报警</button>
+  <button id="bMute" hidden>消音</button>
+  <button id="bAbort" disabled>中止</button>
+</div>
+<script src="/common.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s), BY = '主机触摸屏';
+const NEED_ACK = ['IP_HIGH', 'PRESS_HIGH', 'PRESS_LOW', 'WATER_LOW', 'EXPOSE_END'];
+let cur = new URLSearchParams(location.search).get('dev') || '', dev = null, note = '', noteUntil = 0, armed = '', armTimer = 0;
+
+function setText(sel, text) { const e = $(sel); if (e.textContent !== text) e.textContent = text; }
+function flash(text) { note = text; noteUntil = Date.now() + 6000; }
+async function send(kind, what) {
+  if (!dev) return;
+  const r = await postJSON('/api/cmd', {dev: dev.id, kind, by: BY});
+  flash(r.ok ? '已发出“' + what + '”' : r.err);
+  tick();
+}
+// 需要再按一次才生效的按钮:第一次按下后 4 秒内再按才发命令
+function arm(id) { armed = id; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = ''; paint(); }, 4000); paint(); }
+function disarm() { armed = ''; clearTimeout(armTimer); }
+$('#bAbort').onclick = () => { if (armed === 'abort') { disarm(); send('abort', '中止'); } else arm('abort'); };
+$('#bMain').onclick = () => {
+  const a = dev && ACTION[dev.last.ph];
+  if (!a) return;
+  if (a.confirm && armed !== 'main') { arm('main'); return; }
+  disarm(); send(a.kind, a.label);
+};
+$('#bAck').onclick = () => send('ack', '确认报警');
+$('#bMute').onclick = () => send('mute', '消音');
+
+function row(key, v, n, set, duty, on) {
+  setText('#v' + key, fx(v, n));
+  setText('#s' + key, on ? '设定 ' + fx(set, 1) : '关');
+  const d = isNum(duty) ? Math.max(0, Math.min(100, duty)) : 0;
+  $('#d' + key).style.width = d + '%';
+  setText('#p' + key, d.toFixed(0) + '%');
+}
+function paint() {
+  const strip = $('#strip');
+  if (!dev) {
+    setText('#link', '没有设备'); $('#link').className = 'pill';
+    strip.className = ''; setText('#strip', cur ? '服务器上没有设备 ' + cur + '。等主机连上。' : '还没有设备连上服务器。');
+    $('#bMain').disabled = $('#bAbort').disabled = true;
+    return;
+  }
+  const L = dev.last, t = L.t || {}, duty = L.duty || {}, al = L.al || [], ph = L.ph, on = dev.online, tg = L.target;
+  setText('#devId', dev.id);
+  setText('#link', on ? '在线' : '离线'); $('#link').className = 'pill ' + (on ? 'on' : 'off');
+  setText('#phName', PH_CN[ph] || ph);
+  setText('#tLabel', ph === 'EXPOSE' ? '剩余' : ph === 'IDLE' ? '' : '已用时');
+  setText('#timer', ph === 'EXPOSE' ? mmss(L.exposeLeft) : ph === 'IDLE' ? '' : mmss(L.phSec));
+
+  // 中间一条:报警优先,其次是刚才操作的回话,最后是当前阶段的提示
+  const lv = alarmLevel(al), a = ACTION[ph], rd = readiness(L);
+  strip.className = lv;
+  if (!on) { strip.className = 'high'; setText('#strip', '和服务器之间的数据断了。这块屏不再更新,请看主机指示灯,用硬件按键操作。'); }
+  else if (al.length) setText('#strip', al.map(x => alarmInfo(x).cn).join(' · ') + '。' + alarmInfo(al[0]).did);
+  else if (Date.now() < noteUntil) setText('#strip', note);
+  else setText('#strip', ph === 'PREHEAT' ? '等待到温:' + [['syr', '注射筒'], ['line', '高压管'], ['gas', '气体'], ['ip', '腹腔']].map(x => x[1] + (rd[x[0]] ? ' ✓' : ' …')).join('  ') : a ? a.hint : '');
+
+  const isOn = ch => channelOn(L, ch);
+  row('Syr', t.syr1, 1, tg, duty.syr, isOn('syr'));
+  row('Line', t.line1, 1, tg, duty.line, isOn('line'));
+  row('Hum', t.humOut, 1, isNum(tg) ? tg + 1 : null, duty.hum, isOn('hum'));
+  row('Tube', t.gasEnd, 1, tg, duty.tube, isOn('tube'));
+  row('Pump', L.flow, 1, L.flowSet, duty.pump, isOn('pump'));
+
+  const m = ipMean(t);
+  setText('#ipMean', fx(m)); $('#ipMean').className = al.includes('IP_HIGH') ? 'hi' : al.includes('IP_LOW') ? 'lo' : '';
+  setText('#ipTg', '目标 ' + fx(tg) + ' ℃');
+  setText('#ip1', fx(t.ip1)); setText('#ip2', fx(t.ip2)); setText('#press', fx(L.press)); setText('#lineOut', fx(t.lineOut));
+
+  const bm = $('#bMain'), ba = $('#bAbort'), live = ['PREHEAT', 'READY', 'NEBULIZE', 'EXPOSE'].includes(ph);
+  if (armed === 'main' && !(a && a.confirm)) disarm();
+  setText('#bMain', a ? (armed === 'main' ? '再按一次:' + a.label : a.label) : '—'); bm.classList.toggle('arm', armed === 'main');
+  bm.disabled = !on || !a || (ph === 'PREHEAT' && !rd.heat);
+  if (armed === 'abort' && !live) disarm();
+  setText('#bAbort', armed === 'abort' ? '再按一次确认中止' : '中止'); ba.classList.toggle('arm', armed === 'abort');
+  ba.disabled = !on || !live;
+  $('#bAck').hidden = !al.some(x => NEED_ACK.includes(x)); $('#bMute').hidden = !al.length;
+  setText('#bMute', L.muted ? '已消音' : '消音');
+  $('#bAck').disabled = $('#bMute').disabled = !on;
+}
+async function tick() {
+  try {
+    const j = await getJSON('/api/state');
+    if (!cur && j.devices.length) cur = j.devices[0].id;
+    dev = j.devices.find(d => d.id === cur) || null;
+    paint();
+  } catch (e) {
+    $('#strip').className = 'high'; setText('#strip', '连不上服务器。这块屏不再更新,请看主机指示灯,用硬件按键操作。');
+    setText('#link', '断开'); $('#link').className = 'pill off';
+    $('#bMain').disabled = $('#bAbort').disabled = true;
+  }
+}
+setInterval(tick, 1000); tick();
+</script></body></html>

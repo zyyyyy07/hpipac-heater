@@ -41,7 +41,7 @@ def save(params):
     try:
         import drawings
         drawings.write_all(lambda s: None)
-        lines.append("图纸包已更新: ../drawings/IW-drawings.pdf 和 ../drawings/dxf/")
+        lines.append("图纸包已更新: ../drawings/HP-drawings.pdf 和 ../drawings/dxf/")
     except Exception as e:                      # 图纸生成失败不影响模型导出
         lines.append(f"加工图未更新: {e}")
     return {"ok": True, "log": lines, "out": "3-mechanical/models 和 3-mechanical/drawings"}

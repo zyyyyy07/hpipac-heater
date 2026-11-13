@@ -55,7 +55,7 @@ const matBuy=new THREE.MeshStandardMaterial({color:0x7d878c,metalness:.1,roughne
 const matSoft=new THREE.MeshStandardMaterial({color:0xbfe6f2,metalness:0,roughness:.4,side:THREE.DoubleSide,transparent:true,opacity:.45,depthWrite:false});
 const matLn=new THREE.LineBasicMaterial({color:0x0b1215});
 const matScr=new THREE.MeshStandardMaterial({color:0x0a0f12,metalness:.3,roughness:.25,side:THREE.DoubleSide});
-const MATS={AL:matAl,PRINT:matPr,BUY:matBuy,SOFT:matSoft,SCREEN:matScr},KIND={AL:['#c9d3d8','CNC 铝件'],PRINT:['#4a9fb3','3D 打印件'],BUY:['#7d878c','外购件(示意)'],SOFT:['#bfe6f2','输液袋、滴斗、输液管(示意)'],SCREEN:['#0a0f12','触摸屏(示意)']};
+const MATS={AL:matAl,PRINT:matPr,BUY:matBuy,SOFT:matSoft,SCREEN:matScr},KIND={AL:['#c9d3d8','CNC 铝件'],PRINT:['#4a9fb3','3D 打印件'],BUY:['#7d878c','外购件(示意)'],SOFT:['#bfe6f2','病人、针筒、管路(示意)'],SCREEN:['#0a0f12','触摸屏(示意)']};
 let shown,group,fitNext=true,sec=false,size=[1,1,1];
 function resize(){const m=$('main');renderer.setSize(m.clientWidth,m.clientHeight,false);cam.aspect=m.clientWidth/m.clientHeight;cam.updateProjectionMatrix()}
 addEventListener('resize',resize);

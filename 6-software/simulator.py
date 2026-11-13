@@ -1,97 +1,319 @@
 #!/usr/bin/env python3
-"""设备模拟器:没有硬件时用它测试服务器和三个页面。
-用法: python simulator.py [服务器地址] [设备数] [加速倍数]
-例:   python simulator.py http://127.0.0.1:8080 3 20
-模拟的是固件的对外行为(状态机、滴空截停、报警),不是真实的热学过程。
+"""hPIPAC 前端加热系统 · 设备模拟器。没有硬件时用它让控制台有数据可看。
+
+用法:
+  python simulator.py [服务器地址] [台数] [加速倍数] [--first 起始编号] [--fault 名称@秒[+持续秒],...]
+  python simulator.py http://127.0.0.1:8080 1 20
+  python simulator.py http://127.0.0.1:8080 1 20 --fault ip_high@600
+
+模拟的内容:接口约定里的阶段机、四路加热和循环泵的开关规则、报警条件和联锁动作,加上一个很粗的热模型。
+热模型里的时间常数是随手取的,只为了让曲线看起来像样,不是实测数据,不能拿来估计真机的升温时间。
+
+故障注入(只对第一台模拟设备生效;秒数是模拟器启动后的“设备时间”,受加速倍数影响):
+  ip_high        腹腔探头 1 读数升到约 44.2 ℃(默认持续 180 秒)    → IP_HIGH
+  overtemp_drug  注射筒加热失控升温                                → OVERTEMP_DRUG
+  overtemp_gas   输气管加热失控升温                                → OVERTEMP_GAS
+  sensor         注射筒保护传感器读数偏高 2.5 ℃                     → SENSOR
+  sensor_open    输气管病人端传感器断线(上报 null)                 → SENSOR
+  press_high     腹腔压力升到约 19.5 mmHg(默认持续 30 秒)          → PRESS_HIGH
+  press_low      腹腔压力掉到约 4.5 mmHg(默认持续 30 秒;泵在转才报)→ PRESS_LOW
+  water_low      加湿罐缺水:底座很热但出口气温上不去(泵在转才报)  → WATER_LOW
+压力故障只在气腹已经建立(预热 1 分钟以后到暴露结束)时才看得出来。
+  lid            高压管保温板被打开(默认持续 60 秒)                → LID
 """
 import json, math, random, sys, time, urllib.request
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
-N = int(sys.argv[2]) if len(sys.argv) > 2 else 3
-SPEED = float(sys.argv[3]) if len(sys.argv) > 3 else 20.0
-UA, AMB = 0.96, 22.0
+AMB = 22.0            # 室温
+BODY = 37.0           # 不循环时腹腔温度回落的方向
+PHASES = ("IDLE", "PREHEAT", "READY", "NEBULIZE", "EXPOSE", "EVAC", "DONE")
+LATCHED = ("OVERTEMP_DRUG", "OVERTEMP_GAS", "SENSOR")           # 只有重新上电才能清除
+NEED_ACK = ("IP_HIGH", "PRESS_HIGH", "PRESS_LOW", "WATER_LOW", "EXPOSE_END")   # 条件消失后还要按“确认”
+FAULT_DUR = {"ip_high": 180, "press_high": 30, "press_low": 30, "lid": 60}
+FAULTS = ("ip_high", "overtemp_drug", "overtemp_gas", "sensor", "sensor_open", "press_high", "press_low", "water_low", "lid")
 
 
-class Dev:
-    def __init__(self, i):
-        self.id = f"IW-{i:03d}"
-        self.st, self.task = "IDLE", None
-        self.tp = AMB; self.ts = 0.0; self.fs = 0.0; self.df = 20
-        self.vol = self.rem = 0.0; self.roller = 1.0
-        self.al = set(); self.bat = random.randint(60, 100); self.nodrop = 0.0
+def lag(cur, goal, tau, dt):
+    """一阶惯性:cur 以时间常数 tau 靠近 goal。"""
+    return goal + (cur - goal) * math.exp(-dt / tau)
 
-    def flow(self):
-        return self.fs * self.roller if self.st == "RUN" and self.rem > 0 else 0.0
+
+def parse_faults(spec):
+    out = []
+    for item in filter(None, spec.split(",")):
+        name, _, when = item.partition("@")
+        start, _, dur = when.partition("+")
+        if name not in FAULTS or not start:
+            sys.exit("看不懂的故障写法: %s。可用的名称: %s,写法如 ip_high@600 或 lid@300+60" % (item, " ".join(FAULTS)))
+        out.append((name, float(start), float(dur) if dur else FAULT_DUR.get(name, float("inf"))))
+    return out
+
+
+class Device:
+    def __init__(self, did, faults=()):
+        self.id, self.faults = did, list(faults)
+        self.now = 0.0                                   # 设备时间,秒
+        self.ph, self.phSec = "IDLE", 0.0
+        self.target, self.exposeMin, self.flowSet, self.circ = 42.0, 30, 10.0, False
+        self.T = {"syr": AMB, "line": AMB, "lineOut": AMB, "humPlate": AMB, "humOut": AMB, "gasEnd": AMB, "ip1": 36.6, "ip2": 36.3}
+        self.ipOff = 0.0                                 # ip_high 故障的程度,0 到 1
+        self.press, self.flow = 0.0, 0.0             # 气腹还没建立,压力为 0
+        self.pumpRun = 0.0                               # 循环泵已经连续运转的秒数
+        self.al = set()
+        self.tm = {}                                     # 各报警条件已经持续的秒数
+        self.sensorOff = set()                           # SENSOR 报警关掉的通路
+        self.ipSkip = False                              # 操作者已手动跳过腹腔温度条件
+        self.lost = 0.0                                  # READY 里条件已经失去的秒数
+        self.muteLeft = 0.0
+        self.on = dict.fromkeys(("syr", "line", "hum", "tube", "pump"), False)
+        self.duty = dict.fromkeys(self.on, 0)
+        self.rd = {}                                     # 本拍的传感器读数(带噪声,可能是 None)
+
+    # ----- 故障 -----
+    def fault(self, name):
+        return any(n == name and s <= self.now < s + d for n, s, d in self.faults)
+
+    # ----- 阶段 -----
+    def go(self, ph):
+        if ph == "IDLE":
+            self.ipSkip = False
+            self.al.discard("EXPOSE_END")
+        self.ph, self.phSec, self.lost = ph, 0.0, 0.0
+        self.tm.pop("ip_low", None)
+
+    def heat_ok(self):
+        r, tg = self.rd, self.target
+        pair = [r.get(k) for k in ("syr1", "syr2", "line1", "line2")]
+        return all(x is not None and abs(x - tg) <= 0.5 for x in pair) and r.get("gasEnd") is not None and r["gasEnd"] >= tg - 1.0
+
+    def ip_mean(self):
+        v = [x for x in (self.rd.get("ip1"), self.rd.get("ip2")) if x is not None]
+        return sum(v) / len(v) if v else None
+
+    def ip_ok(self):
+        m = self.ip_mean()
+        return m is not None and m >= self.target - 1.0
+
+    def command(self, c):
+        """执行服务器转来的命令。返回 None 表示接受,否则返回拒绝原因。"""
+        k, v, ph = c.get("kind"), c.get("value"), self.ph
+        isnum = isinstance(v, (int, float)) and not isinstance(v, bool)
+        if k == "preheat":
+            if ph != "IDLE": return "不在待机"
+            self.go("PREHEAT")
+        elif k == "ready":
+            if ph != "PREHEAT": return "不在预热"
+            if not self.heat_ok(): return "四路还没到温"
+            self.ipSkip = True
+            self.go("READY")
+        elif k == "nebulize":
+            if ph != "READY": return "不在就绪"
+            self.go("NEBULIZE")
+        elif k == "expose":
+            if ph != "NEBULIZE": return "不在喷雾"
+            self.go("EXPOSE")
+        elif k == "evac":
+            if ph != "EXPOSE": return "不在暴露"
+            self.go("EVAC")
+        elif k == "finish":
+            if ph == "EVAC": self.go("DONE")
+            elif ph == "DONE": self.go("IDLE")
+            else: return "不在排气或结束"
+        elif k == "abort":
+            # 待机、排气、结束阶段本来就全关,中止不改变阶段
+            if ph in ("PREHEAT", "READY", "NEBULIZE", "EXPOSE"): self.go("EVAC")
+        elif k == "target":
+            if not (isnum and 37.0 <= v <= 43.0): return "目标温度超范围"
+            self.target = round(float(v), 1)
+        elif k == "flow":
+            if not (isnum and 0 <= v <= 15): return "流量超范围"
+            self.flowSet = round(float(v), 1)
+        elif k == "exposeMin":
+            if not (isnum and 1 <= v <= 60): return "暴露时间超范围"
+            self.exposeMin = int(v)
+        elif k == "circInExpose":
+            if not isinstance(v, bool): return "参数不是 true/false"
+            self.circ = v
+        elif k == "ack":
+            r = self.rd
+            if "IP_HIGH" in self.al and all(r.get(x) is None or r[x] < 42.5 for x in ("ip1", "ip2")): self.al.discard("IP_HIGH")
+            if self.press < 18.0: self.al.discard("PRESS_HIGH")
+            self.al.discard("PRESS_LOW"); self.tm.pop("press_low", None)   # 泵停着时不判;恢复后还低会再报
+            self.al.discard("WATER_LOW"); self.tm.pop("water", None)
+            self.al.discard("EXPOSE_END")
+        elif k == "mute":
+            self.muteLeft = 120.0
+        else:
+            return "不认识的命令"
+        return None
+
+    # ----- 每一步(dt 秒设备时间) -----
+    def held(self, key, cond, dt):
+        """条件连续成立的秒数;一不成立就清零。"""
+        self.tm[key] = self.tm.get(key, 0.0) + dt if cond else 0.0
+        return self.tm[key]
+
+    def outputs(self):
+        ph, al = self.ph, self.al
+        heat_drug = ph in ("PREHEAT", "READY", "NEBULIZE")
+        heat_gas = ph in ("PREHEAT", "READY", "NEBULIZE", "EXPOSE")
+        on = {"syr": heat_drug, "line": heat_drug, "hum": heat_gas, "tube": heat_gas,
+              # 预热阶段要等气腹建立(压力到 8 mmHg)泵才转
+              "pump": (ph == "PREHEAT" and self.press >= 8.0) or ph == "READY" or (ph == "EXPOSE" and self.circ)}
+        if "OVERTEMP_DRUG" in al: on["syr"] = on["line"] = False
+        if "OVERTEMP_GAS" in al: on["hum"] = on["tube"] = on["pump"] = False
+        if "IP_HIGH" in al: on = dict.fromkeys(on, False)
+        if "PRESS_HIGH" in al or "PRESS_LOW" in al: on["pump"] = False
+        if "WATER_LOW" in al: on["hum"] = False
+        if "LID" in al: on["line"] = False
+        for ch in self.sensorOff: on[ch] = False
+        if self.flowSet <= 0: on["pump"] = False
+        self.on = on
+
+    def physics(self, dt):
+        T, on, tg = self.T, self.on, self.target
+        T["syr"] = lag(T["syr"], (45.5 if self.fault("overtemp_drug") else tg) if on["syr"] else AMB, 120 if on["syr"] else 900, dt)
+        T["line"] = lag(T["line"], tg if on["line"] else AMB, 90 if on["line"] else 700, dt)
+        T["lineOut"] = lag(T["lineOut"], T["line"] - (1.3 if on["line"] else 0.3), 60, dt)
+        dry = self.fault("water_low")
+        plate = 80.0 if dry else 58.0 + (tg - 37.0)
+        if not on["pump"]: plate = min(plate, 55.0)      # 泵不转时底座降到待机温度(上限 60 ℃)
+        T["humPlate"] = lag(T["humPlate"], plate if on["hum"] else AMB, 150 if on["hum"] else 600, dt)
+        hum_goal = (tg - 5.0 if dry else tg + 1.0) if on["hum"] and T["humPlate"] > 45 else AMB + 4
+        T["humOut"] = lag(T["humOut"], hum_goal, 120 if on["hum"] else 500, dt)
+        T["gasEnd"] = lag(T["gasEnd"], (46.0 if self.fault("overtemp_gas") else tg) if on["tube"] else AMB + 6, 100 if on["tube"] else 400, dt)
+        want = self.flowSet if on["pump"] else 0.0
+        self.flow = lag(self.flow, want, 3, dt)
+        if self.flow > 0.5:      # 循环着:腹腔温度慢慢靠近送回来的气体温度
+            tau = 900 * 10.0 / max(self.flow, 1.0)
+            gas = max(T["gasEnd"], BODY - 0.3)   # 气体还没热起来时不把腹腔算凉
+            T["ip1"] = lag(T["ip1"], gas - 0.2, tau, dt)
+            T["ip2"] = lag(T["ip2"], gas - 0.6, tau, dt)
+        else:                    # 不循环:慢慢回落到体温
+            T["ip1"] = lag(T["ip1"], BODY, 3600, dt)
+            T["ip2"] = lag(T["ip2"], BODY - 0.2, 3600, dt)
+        self.ipOff = lag(self.ipOff, 1.0 if self.fault("ip_high") else 0.0, 25, dt)
+        # 气腹:预热开始约 1 分钟后建立(模拟外科医生接好气腹机),进入排气阶段后放掉
+        inflated = (self.ph == "PREHEAT" and self.phSec > 60) or self.ph in ("READY", "NEBULIZE", "EXPOSE")
+        p = 0.0 if not inflated else 19.5 if self.fault("press_high") else 4.5 if self.fault("press_low") else 12.0
+        self.pumpRun = self.pumpRun + dt if on["pump"] else 0.0
+        self.press = lag(self.press, p, 8, dt)
+
+    def read(self):
+        n = lambda: random.gauss(0, 0.03)
+        T = self.T
+        self.rd = {"syr1": T["syr"] + n(), "syr2": T["syr"] - 0.1 + n() + (2.5 if self.fault("sensor") else 0),
+                   "line1": T["line"] + n(), "line2": T["line"] - 0.1 + n(), "lineOut": T["lineOut"] + n(),
+                   "humPlate": T["humPlate"] + n(), "humOut": T["humOut"] + n(),
+                   "gasEnd": None if self.fault("sensor_open") else T["gasEnd"] + n(),
+                   "ip1": T["ip1"] + self.ipOff * max(0.0, 44.2 - T["ip1"]) + n(), "ip2": T["ip2"] + n()}
+
+    def alarms(self, dt):
+        r, al, tg = self.rd, self.al, self.target
+        ge = lambda k, lim: r.get(k) is not None and r[k] >= lim
+        if any(ge(k, 43.8) for k in ("syr1", "syr2", "line1", "line2")): al.add("OVERTEMP_DRUG")
+        if ge("gasEnd", 44.5) or ge("humOut", 46.0) or ge("humPlate", 88.0): al.add("OVERTEMP_GAS")
+        if ge("ip1", 43.5) or ge("ip2", 43.5): al.add("IP_HIGH")
+        # 成对传感器不一致,或者控制用传感器断线:关掉对应的通路
+        for ch, a, b in (("syr", "syr1", "syr2"), ("line", "line1", "line2")):
+            bad = r[a] is not None and r[b] is not None and abs(r[a] - r[b]) > 1.5
+            if self.held("pair_" + ch, bad, dt) >= 10 or r[a] is None or r[b] is None:
+                al.add("SENSOR"); self.sensorOff.add(ch)
+        if r["humOut"] is None or r["humPlate"] is None: al.add("SENSOR"); self.sensorOff.add("hum")
+        if r["gasEnd"] is None: al.add("SENSOR"); self.sensorOff.add("tube")
+        if self.held("press_high", self.press >= 18.0, dt) >= 3: al.add("PRESS_HIGH")
+        if self.held("press_low", self.on["pump"] and self.press <= 6.0, dt) >= 5: al.add("PRESS_LOW")
+        water = self.pumpRun >= 120 and self.on["hum"] and ge("humPlate", 75.0) and r["humOut"] is not None and r["humOut"] < tg - 3.0
+        if self.held("water", water, dt) >= 120: al.add("WATER_LOW")
+        al.add("LID") if self.fault("lid") else al.discard("LID")
+        al.add("PREHEAT_SLOW") if self.ph == "PREHEAT" and self.phSec > 3600 else al.discard("PREHEAT_SLOW")
+        m = self.ip_mean()
+        low = self.ph == "EXPOSE" and m is not None and m < tg - 2.0
+        al.add("IP_LOW") if self.held("ip_low", low, dt) >= 300 else al.discard("IP_LOW")
+
+    def phase_auto(self, dt):
+        if self.ph == "PREHEAT":
+            if self.heat_ok() and (self.ip_ok() or self.ipSkip): self.go("READY")
+        elif self.ph == "READY":
+            ok = self.heat_ok() and (self.ip_ok() or self.ipSkip)
+            self.lost = 0.0 if ok else self.lost + dt
+            if self.lost > 60: self.go("PREHEAT")
+        elif self.ph == "EXPOSE":
+            if self.phSec >= self.exposeMin * 60:
+                self.al.add("EXPOSE_END")
+                self.go("EVAC")
 
     def step(self, dt):
-        fl = self.flow()
-        if self.st in ("READY", "RUN", "PAUSE") and self.ts:
-            mc = fl / 3600 * 4.18
-            want = self.ts if mc < 0.005 else min(41.0, max(self.ts, (self.ts - AMB * math.exp(-UA / mc)) / (1 - math.exp(-UA / mc))))
-            self.tp += (want - self.tp) * min(1.0, dt / 60)
-        else:
-            self.tp += (AMB - self.tp) * min(1.0, dt / 300)
-        if self.st == "RUN":
-            self.rem = max(0.0, self.rem - fl * dt / 3600)
-            self.nodrop = self.nodrop + dt if fl < 1 else 0.0
-            self.al.discard("LOWVOL")
-            if self.rem <= max(10.0, 0.05 * self.vol):
-                self.al.add("LOWVOL")
-            if self.rem <= 0.5 and self.nodrop >= 20:      # 滴空:无液滴 + 余量低 → 截停
-                self.st = "DONE"; self.al = {"EMPTY"}
-
-    def est_out(self):
-        fl = self.flow(); mc = fl / 3600 * 4.18
-        if not self.ts:
-            return AMB
-        return self.tp if mc < 0.005 else AMB + (self.tp - AMB) * (1 - math.exp(-UA / mc)) * math.exp(-0.01 / mc)
-
-    def on_cmd(self, c):
-        k = c["c"]
-        if k == "start" and self.st in ("IDLE", "READY"):
-            self.task, self.vol, self.rem = c["task"], c["vol"], c["vol"]
-            self.fs, self.ts, self.df = c["rate"], c["temp"], c["df"]
-            self.roller = random.uniform(0.93, 1.05); self.st = "RUN"; self.al.clear(); self.nodrop = 0
-        elif k == "pause" and self.st == "RUN":
-            self.st = "PAUSE"
-        elif k == "resume" and self.st == "PAUSE":
-            self.st = "RUN"; self.nodrop = 0
-        elif k == "rate":
-            self.fs = c["v"]
-        elif k == "temp":
-            self.ts = c["v"]
-        elif k == "finish" and self.st == "DONE":
-            self.st, self.task = "IDLE", None; self.al.clear(); self.ts = 0
-        # mute:只影响蜂鸣器,模拟器忽略
+        self.now += dt
+        self.phSec += dt
+        self.muteLeft = max(0.0, self.muteLeft - dt)
+        self.outputs()
+        self.physics(dt)
+        self.read()
+        self.alarms(dt)
+        self.phase_auto(dt)
+        self.outputs()      # 报警或阶段刚变,输出立刻跟着变
+        T, tg, on = self.T, self.target, self.on
+        pid = lambda ch, cur, sp, hold: int(max(0, min(100, hold + (sp - cur) * 60))) if on[ch] else 0
+        self.duty = {"syr": pid("syr", T["syr"], tg, 30), "line": pid("line", T["line"], tg, 20),
+                     "hum": pid("hum", T["humOut"], tg + 1, 55), "tube": pid("tube", T["gasEnd"], tg, 35),
+                     "pump": int(round(self.flowSet / 15.0 * 100)) if on["pump"] else 0}
 
     def telemetry(self):
-        fl = self.flow()
-        return {"id": self.id, "st": self.st, "task": self.task, "tp": round(self.tp, 2), "to": round(self.est_out(), 2),
-                "ts": self.ts, "fl": round(fl, 1), "fs": self.fs, "dpm": round(fl * self.df / 60, 1),
-                "w": round(self.rem + 35, 1), "rem": round(self.rem, 1), "eta": round(self.rem / fl * 60, 1) if fl > 1 else -1,
-                "al": sorted(self.al), "bat": self.bat, "clamp": 1 if self.st == "RUN" else 0}
+        r1 = lambda v: None if v is None else round(v, 1)
+        left = max(0, int(self.exposeMin * 60 - self.phSec)) if self.ph == "EXPOSE" else -1
+        return {"id": self.id, "ph": self.ph, "target": self.target, "exposeMin": self.exposeMin, "flowSet": self.flowSet,
+                "circInExpose": self.circ, "t": {k: r1(v) for k, v in self.rd.items()},
+                "press": round(max(0.0, self.press + random.gauss(0, 0.15)), 1), "flow": round(max(0.0, self.flow + (random.gauss(0, 0.1) if self.flow > 0.3 else 0)), 1),
+                "duty": self.duty, "phSec": int(self.phSec), "exposeLeft": left, "al": sorted(self.al), "muted": self.muteLeft > 0}
 
-    def sync(self):
-        req = urllib.request.Request(URL + "/api/device/telemetry", json.dumps(self.telemetry()).encode(),
-                                     {"Content-Type": "application/json"})
-        r = json.loads(urllib.request.urlopen(req, timeout=3).read())
-        for c in r["cmds"]:
-            self.on_cmd(c)
-        t = r.get("task")
-        if t and self.st == "IDLE":
-            self.st, self.ts = "READY", t["temp"]      # 收到任务:开始预热
-        elif not t and self.st == "READY":
-            self.st, self.ts = "IDLE", 0               # 任务被取消
+
+def post(server, body):
+    req = urllib.request.Request(server + "/api/device/telemetry", data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.loads(r.read())
+
+
+def main():
+    args, first, faults = [], 1, []
+    it = iter(sys.argv[1:])
+    for a in it:
+        if a == "--fault": faults = parse_faults(next(it, ""))
+        elif a == "--first": first = int(next(it, "1"))
+        elif a in ("-h", "--help"): print(__doc__); return
+        else: args.append(a)
+    server = (args[0] if args else "http://127.0.0.1:8080").rstrip("/")
+    n = int(args[1]) if len(args) > 1 else 1
+    speed = float(args[2]) if len(args) > 2 else 1.0
+    devs = [Device("HP-%03d" % (first + i), faults if i == 0 else ()) for i in range(n)]
+    period = max(0.1, 2.0 / speed)        # 真实时间里多久上报一次
+    dt = period * speed                   # 每次上报之间过去的设备时间
+    print("模拟 %d 台设备(%s 起),加速 %g 倍,服务器 %s。按 Ctrl+C 停止。" % (n, devs[0].id, speed, server), flush=True)
+    down = False
+    while True:
+        t0 = time.time()
+        for d in devs:
+            left = dt
+            while left > 1e-9:            # 热模型每步不超过 1 秒
+                h = min(1.0, left)
+                d.step(h)
+                left -= h
+            try:
+                resp = post(server, d.telemetry())
+                if down: print("服务器恢复", flush=True)
+                down = False
+            except OSError as e:
+                if not down: print("连不上服务器: %s,继续重试" % e, flush=True)
+                down = True
+                continue
+            for c in resp.get("cmds", []):
+                why = d.command(c)
+                print("%s 命令 %s → %s" % (d.id, json.dumps(c, ensure_ascii=False), "拒绝:" + why if why else "执行,阶段 " + d.ph), flush=True)
+        time.sleep(max(0.0, period - (time.time() - t0)))
 
 
 if __name__ == "__main__":
-    devs = [Dev(i + 1) for i in range(N)]
-    print(f"模拟 {N} 台设备 → {URL},时间加速 {SPEED:g} 倍。Ctrl+C 退出。")
-    while True:
-        for d in devs:
-            d.step(1.0 * SPEED)
-            try:
-                d.sync()
-            except Exception as e:
-                print(d.id, "上报失败:", e)
-        time.sleep(1.0)
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

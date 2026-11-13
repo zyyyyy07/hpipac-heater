@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""样机全部结构件的参数化三维模型(STEP 给 CNC/改图用,STL 给 3D 打印用)。
+"""hPIPAC 前端加热系统样机全部结构件的参数化三维模型(STEP 给 CNC/改图用,STL 给 3D 打印用)。
 依赖: pip install cadquery
   python build.py      按 params.json(没有则用默认值)导出全部零件到 ../models/cnc 和 ../models/print
   python studio.py     打开三维查看器,在浏览器里旋转查看、改尺寸、保存
@@ -15,17 +15,19 @@ PARAMS_FILE = os.path.join(HERE, "params.json")
 
 # (键, 名称, 默认值, 最小, 最大, 步长, 分组)
 PARAMS = [
-    ("PL", "铝板长", 200.0, 120, 300, 1, "加温铝板"),
-    ("PW", "铝板宽", 64.0, 50, 110, 1, "加温铝板"),
-    ("PT", "铝板厚", 6.0, 5, 10, 0.5, "加温铝板"),
-    ("GROOVE_R", "槽半径(球头刀 R)", 2.0, 1.5, 3.0, 0.05, "加温铝板"),
-    ("GROOVE_DEPTH", "单片槽深", 1.95, 1.2, 3.0, 0.05, "加温铝板"),
-    ("BEND_R", "管路转弯半径", 12.0, 8, 22, 0.5, "加温铝板"),
-    ("S_WALL", "壁厚", 2.5, 1.6, 4, 0.1, "加温模块外壳"),
-    ("S_FLOOR", "底厚", 2.0, 1.2, 4, 0.1, "加温模块外壳"),
-    ("S_GAP", "铝板四周间隙", 1.5, 0.3, 4, 0.1, "加温模块外壳"),
-    ("S_INSUL", "保温层厚", 3.0, 1, 10, 0.5, "加温模块外壳"),
-    ("DRIP_D", "滴斗外径", 17.0, 12, 24, 0.1, "滴斗传感器夹"),
+    ("PL", "铝板长", 200.0, 120, 300, 1, "高压管保温板"),
+    ("PW", "铝板宽", 76.0, 50, 120, 1, "高压管保温板"),
+    ("PT", "铝板厚", 6.0, 5, 10, 0.5, "高压管保温板"),
+    ("GROOVE_R", "槽半径(= 高压管外径的一半)", 2.0, 1.5, 3.5, 0.05, "高压管保温板"),
+    ("GROOVE_DEPTH", "单片槽深", 1.95, 1.2, 3.5, 0.05, "高压管保温板"),
+    ("BEND_R", "高压管转弯半径", 15.0, 8, 25, 0.5, "高压管保温板"),
+    ("S_WALL", "壁厚", 2.5, 1.6, 4, 0.1, "保温板外壳"),
+    ("S_FLOOR", "底厚", 2.0, 1.2, 4, 0.1, "保温板外壳"),
+    ("S_GAP", "铝板四周间隙", 1.5, 0.3, 4, 0.1, "保温板外壳"),
+    ("S_INSUL", "保温层厚", 3.0, 1, 10, 0.5, "保温板外壳"),
+    ("SYR_D", "注射筒外径", 50.0, 30, 75, 0.5, "注射筒加热套"),
+    ("SYR_L", "加热段长度", 120.0, 60, 200, 1, "注射筒加热套"),
+    ("HUM_D", "加湿罐底面直径", 110.0, 80, 150, 0.5, "加湿加热底座"),
     ("BX", "盒长", 205.0, 120, 280, 1, "主控盒"),
     ("BY", "盒宽", 145.0, 80, 220, 1, "主控盒"),
     ("BZ", "盒高", 65.0, 35, 100, 1, "主控盒"),
@@ -115,7 +117,7 @@ def plate(upper):
     return p
 
 
-# ---------------- 加温模块外壳(3D 打印,上下各一) ----------------
+# ---------------- 高压管保温板外壳(3D 打印,上下各一) ----------------
 EAR_OUT = 9.0     # 绑带耳伸出壳体的长度
 def heater_shell(upper):
     ox, oy = PL + 2 * (S_GAP + S_WALL), PW + 2 * (S_GAP + S_WALL)
@@ -130,7 +132,7 @@ def heater_shell(upper):
         s = s.cut(cq.Workplane("XY").workplane(offset=top - 2.2).center(x, yy + off - 2.6).rect(S_WALL + S_GAP + 2, 5.2, centered=False).extrude(3))
     if not upper:                                                    # 下壳:长边中部 8 x 5 线缆出口
         s = s.cut(cq.Workplane("XY").workplane(offset=S_FLOOR + 1).center(ox / 2 - 4, -1).rect(8, S_WALL + 2, centered=False).extrude(5))
-        for x in (ox * 0.25, ox * 0.75):                             # 另一条长边:两个绑带耳,穿 15 mm 魔术贴绑带或挂绳
+        for x in (ox * 0.25, ox * 0.75):                             # 另一条长边:两个绑带耳,穿 15 mm 绑带固定在手术台边
             ear = cq.Workplane("XY").center(x, oy + EAR_OUT / 2 - 0.5).rect(24, EAR_OUT + 1).extrude(4).edges("|Z").fillet(2)
             s = s.union(ear).cut(cq.Workplane("XY").center(x, oy + EAR_OUT / 2 + 0.5).rect(17, 3.5).extrude(4))
     else:                                                            # 上壳:4 个螺丝过孔,拧 M3 夹紧螺丝用
@@ -139,26 +141,47 @@ def heater_shell(upper):
     return s
 
 
-# ---------------- 滴斗传感器夹(3D 打印) ----------------
-def drip_clip():
-    w, dpt, h = DRIP_D + 23.0, DRIP_D + 13.0, 24.0
-    c = cq.Workplane("XY").box(w, dpt, h).edges("|Z").fillet(3)
-    c = c.cut(cq.Workplane("XY").circle(DRIP_D / 2).extrude(h, both=True))                           # 滴斗孔
-    c = c.cut(cq.Workplane("XY").center(0, dpt / 2).rect(DRIP_D - 3.5, dpt).extrude(h, both=True))   # 前开口,卡入
-    c = c.cut(cq.Workplane("YZ").circle(2.6).extrude(w, both=True))                                  # 5 mm 红外对管同轴孔
-    for x in (-(DRIP_D / 2 + 4.5), DRIP_D / 2 + 4.5):                                                # 背面 2 x M3 安装孔
-        c = c.cut(cq.Workplane("XZ").workplane(offset=dpt / 2 - 8).center(x, 0).circle(1.7).extrude(-10))
-    return c
+# ---------------- 注射筒加热套(3D 打印,两个相同的半壳) ----------------
+SYR_GAP = 4.5     # 注射筒与半壳之间留给硅胶加热片和保温棉的厚度
 
 
-# ---------------- 称重传感器固定座(3D 打印或铝) ----------------
-def loadcell_mount():
-    b = cq.Workplane("XY").box(60, 30, 12).edges("|Z").fillet(3)
-    b = b.union(cq.Workplane("XY").workplane(offset=6).center(-17.5, 0).rect(25, 14).extrude(2))   # 固定端垫高 2,另一端悬空
-    for x in (-25, -10):                                    # 条形称重传感器固定端:2 x M5,孔距 15
-        b = b.cut(cq.Workplane("XY").center(x, 0).circle(2.7).extrude(20, both=True))
-    for x, y in ((8, -10), (8, 10), (24, -10), (24, 10)):   # 4 x M4 固定到主机盒或抱杆夹
-        b = b.cut(cq.Workplane("XY").center(x, y).circle(2.2).extrude(20, both=True))
+def syringe_jacket_half():
+    """半圆筒,轴线沿 X。两片对扣包住高压注射器的针筒,内衬硅胶加热片。"""
+    ri = SYR_D / 2 + SYR_GAP
+    ro = ri + 2.5
+    h = cq.Workplane("YZ").circle(ro).circle(ri).extrude(SYR_L)
+    h = h.cut(cq.Workplane("XY").box(SYR_L + 2, 2 * ro + 2, ro + 1, centered=(False, True, False)).translate((-1, 0, -ro - 1)))
+    for sy in (1, -1):                                   # 两侧法兰,各 2 个 M3 孔,两片用螺丝或绑带对扣
+        y0 = sy * (ro - 1) if sy > 0 else sy * (ro + 10)
+        f = cq.Workplane("XY").center(0, y0).rect(SYR_L, 11, centered=False).extrude(4)
+        for x in (SYR_L * 0.2, SYR_L * 0.8):
+            f = f.cut(cq.Workplane("XY").center(x, sy * (ro + 5)).circle(1.7).extrude(4))
+        h = h.union(f)
+    h = h.cut(cq.Workplane("XY").workplane(offset=ri - 1).center(SYR_L - 10, -4).rect(11, 8, centered=False).extrude(5))   # 出线口
+    return h
+
+
+# ---------------- 加湿加热底座:铝盘(CNC)+ 底座(3D 打印) ----------------
+def hum_plate():
+    """铝盘,上面放一次性加湿罐,下面贴硅胶加热片。"""
+    p = cq.Workplane("XY").circle(HUM_D / 2).extrude(6)
+    for a in (90, 210, 330):                             # 3 x M3 沉头螺丝固定到底座
+        p = p.cut(cq.Workplane("XY").polarArray((HUM_D - 10) / 2, a, 360, 1).circle(1.7).extrude(6))
+    for y in (0, 10):                                    # 2 个测温孔从 +X 侧边钻入
+        p = p.cut(cq.Workplane("YZ").workplane(offset=HUM_D / 2 + 1).center(y, 3).circle(1.1).extrude(-23))
+    return p
+
+
+def hum_base():
+    ro, h = HUM_D / 2 + 5, 45.0
+    b = cq.Workplane("XY").circle(ro).extrude(h).faces("<Z").edges().fillet(1.5)
+    b = b.cut(cq.Workplane("XY").workplane(offset=h - 5.5).circle(HUM_D / 2 + 0.3).extrude(6))          # 铝盘沉台,铝盘高出 0.5
+    b = b.cut(cq.Workplane("XY").workplane(offset=3).circle(HUM_D / 2 - 10).extrude(h))                # 内腔:加热片、保温、接线
+    b = b.cut(cq.Workplane("XY").workplane(offset=3).circle(HUM_D / 2 - 2).extrude(h - 22))             # 台阶以下掏空,壁厚 7
+    for a in (90, 210, 330):                                                                           # 台阶上 3 个 M3 自攻底孔
+        b = b.cut(cq.Workplane("XY").workplane(offset=h - 17).polarArray((HUM_D - 10) / 2, a, 360, 1).circle(1.3).extrude(12))
+    b = b.cut(cq.Workplane("YZ").workplane(offset=ro + 1).center(0, 18).circle(6.1).extrude(-20))      # 侧面 GX12 航空插座孔
+    b = b.cut(cq.Workplane("XY").workplane(offset=h - 9).center(HUM_D / 2 - 11, -5).rect(20, 20, centered=False).extrude(10))   # 测温线出口
     return b
 
 
@@ -169,9 +192,9 @@ def box_body():
     for x, y in ((9, 9), (BX - 9, 9), (9, BY - 9), (BX - 9, BY - 9)):       # 四角螺丝柱,M3 自攻
         b = b.union(cq.Workplane("XY").workplane(offset=BW).center(x, y).circle(4.5).circle(1.3).extrude(BZ - BW))
     side = lambda x, d: cq.Workplane("XZ").center(x, BZ * 0.4).circle(d / 2).extrude(-BW - 1)   # y=0 侧面开孔
-    step = (BX - 60) / 4
-    for i, d in enumerate((8.2, 16.2, 12.2, 12.2, 12.2)):   # DC 电源座;GX16 加温线;GX12 滴斗、称重、夹管阀
-        b = b.cut(side(30 + i * step, d))
+    step = (BX - 44) / 6
+    for i, d in enumerate((16.2, 16.2, 16.2, 16.2, 16.2, 12.2, 12.2)):   # GX16:电源、注射筒套、保温板、加湿底座、输气管;GX12:循环泵、腹腔探头和压力
+        b = b.cut(side(22 + i * step, d))
     return b
 
 
@@ -212,92 +235,118 @@ def _flip(shape, w, h):
 
 
 def heater_module_parts(lift=0.0):
-    """加温模块四件按装配位置摆放。lift 为上半部抬起的距离。返回 [(名称, 类别, 实体)]。"""
+    """高压管保温板四件按装配位置摆放。lift 为上半部抬起的距离。返回 [(名称, 类别, 实体)]。"""
     off = S_GAP + S_WALL
     oy = PW + 2 * off
     zp = S_FLOOR + S_INSUL                      # 下板底面高度
     top = S_FLOOR + S_DEPTH                     # 合模面高度
     return [
-        ("加温模块 下壳", "PRINT", heater_shell(False)),
-        ("加温铝板 下板", "AL", plate(False).translate((off, off, zp))),
-        ("加温铝板 上板", "AL", _flip(plate(True), PW, 0).translate((off, off, top + PT + lift))),
-        ("加温模块 上壳", "PRINT", _flip(heater_shell(True), oy, 2 * top + lift)),
+        ("保温板 下壳", "PRINT", heater_shell(False)),
+        ("保温铝板 下板", "AL", plate(False).translate((off, off, zp))),
+        ("保温铝板 上板", "AL", _flip(plate(True), PW, 0).translate((off, off, top + PT + lift))),
+        ("保温板 上壳", "PRINT", _flip(heater_shell(True), oy, 2 * top + lift)),
     ]
 
 
+def syringe_jacket_parts(lift=0.0):
+    """两片加热套包住注射筒。轴线沿 X。"""
+    ro = SYR_D / 2 + SYR_GAP + 2.5
+    upper = syringe_jacket_half().translate((0, 0, lift))
+    lower = syringe_jacket_half().rotate((0, 0, 0), (1, 0, 0), 180).translate((0, 0, -lift))
+    syr = cq.Workplane("YZ").workplane(offset=-25).circle(SYR_D / 2).extrude(SYR_L + 45)
+    tip = cq.Workplane("YZ").workplane(offset=SYR_L + 20).circle(4).extrude(25)
+    return [("注射筒加热套 半壳", "PRINT", upper), ("注射筒加热套 半壳", "PRINT", lower),
+            ("高压注射器针筒(示意)", "SOFT", syr), ("高压注射器针筒(示意)", "SOFT", tip)]
+
+
+def humidifier_parts():
+    h = 45.0
+    return [("加湿底座", "PRINT", hum_base()), ("加湿铝盘", "AL", hum_plate().translate((0, 0, h - 5.5))),
+            ("一次性加湿罐(示意)", "SOFT", cq.Workplane("XY").workplane(offset=h + 0.5).circle(HUM_D / 2 - 3).extrude(85).edges(">Z").fillet(12))]
+
+
 def _tube(pts, t0=(0, 0, -1), t1=None, d=4.1):
-    """沿曲线扫出一段输液管。pts 为三维点,t0、t1 为起点和终点的走向。"""
+    """沿曲线扫出一段软管。pts 为三维点,t0、t1 为起点和终点的走向。"""
     path = cq.Workplane("XY").spline(pts, tangents=[t0, t1 or tuple(c - a for a, c in zip(pts[-2], pts[-1]))])
     return cq.Workplane(cq.Plane(origin=pts[0], xDir=(t0[1], t0[2], t0[0]) if abs(t0[2]) < 0.9 else (1, 0, 0), normal=t0)).circle(d / 2).sweep(path)
 
 
 def full_assembly():
-    """仅供查看:整机挂在输液架上的样子。灰色和半透明的是外购件和耗材的示意,尺寸为常见规格。"""
+    """仅供查看:手术室里的摆放。灰色和半透明的是外购设备、病人和管路的示意,尺寸为大致比例。"""
     off = S_GAP + S_WALL
     ox = PL + 2 * off
     top = S_FLOOR + S_DEPTH
-    XT, YT = BX / 2 + 40.0, -31.0               # 输液管所在的竖线
-    ZB = BY + 15.0                              # 滴斗下端高度
     parts = []
     add = lambda n, k, s: parts.append((n, k, s))
     box = lambda x0, x1, y0, y1, z0, z1: cq.Workplane("XY").box(x1 - x0, y1 - y0, z1 - z0, centered=False).translate((x0, y0, z0))
     cyl = lambda x, y, z0, z1, d: cq.Workplane("XY").workplane(offset=z0).center(x, y).circle(d / 2).extrude(z1 - z0)
+    ZT = 860.0                                                         # 手术台面高度
+    add("手术台(示意)", "BUY", box(0, 900, -280, 280, ZT - 60, ZT))
+    add("病人腹部(示意)", "SOFT", cq.Workplane("XY").workplane(offset=ZT).center(450, 0).ellipse(270, 175).extrude(120).edges(">Z").fillet(55))
+    ZS = ZT + 120                                                      # 腹壁最高处
+    tro = {"in": (350, -50), "neb": (450, 45), "out": (550, -50)}
+    for k, (x, y) in tro.items():
+        add("穿刺器(示意)", "BUY", cyl(x, y, ZS - 30, ZS + 80, 13))
+    add("雾化喷头(示意)", "BUY", cyl(*tro["neb"], ZS + 80, ZS + 135, 9))
+    # 腹腔温度探头:经穿刺器旁的细线
+    add("腹腔温度探头(示意)", "BUY", cyl(420, -90, ZS - 20, ZS + 40, 3))
+    add("腹腔温度探头(示意)", "BUY", cyl(520, 80, ZS - 20, ZS + 40, 3))
 
-    z_arm = ZB + 60 + 15 + 190 + 30             # 横臂底面:滴斗 60 + 袋口 15 + 袋 190 + 挂钩 30
-    add("输液架立杆 Ø25(示意)", "BUY", cyl(0, 0, -PL - 170, z_arm + 60, 25))
-    # 主控盒:竖着夹在立杆上,盖板朝前,接头朝下
-    stand = lambda s: s.rotate((0, 0, 0), (1, 0, 0), 90).translate((-BX / 2, -20.5, 0))
+    # 高压注射器在病人一侧,针筒指向手术台
+    add("高压注射器(示意)", "BUY", cyl(450, -620, 0, 1010, 34))
+    add("高压注射器(示意)", "BUY", box(385, 515, -690, -560, 1010, 1130))
+    zs, ys = 1070.0, -560.0
+    for n, k, s in syringe_jacket_parts():
+        add(n, k, s.rotate((0, 0, 0), (0, 0, 1), 90).translate((450, ys + 25, zs)))
+    tipy = ys + 25 + SYR_L + 45
+    # 高压管保温板放在手术台边,靠近喷头,绑带固定
+    bx0, by0 = 330.0, -272.0
+    for n, k, s in heater_module_parts():
+        add(n, k, s.translate((bx0, by0, ZT)))
+    y_in, y_out, zt = by0 + off + RUN_Y[0], by0 + off + RUN_Y[2], ZT + top
+    d_hp = 2 * GROOVE_R
+    add("高压管", "SOFT", _tube([(450, tipy, zs), (330, tipy + 60, zs - 110), (bx0 - 70, y_in - 10, zt + 25), (bx0, y_in, zt)], t0=(0, 1, 0), t1=(1, 0, 0), d=d_hp))
+    add("高压管", "SOFT", _tube([(bx0 + ox, y_out, zt), (bx0 + ox + 70, y_out + 60, zt + 70), (tro["neb"][0] + 30, tro["neb"][1] - 40, ZS + 150), (tro["neb"][0], tro["neb"][1], ZS + 135)], t0=(1, 0, 0), t1=(0, 0.3, -1), d=d_hp))
+
+    # 设备架在病人另一侧:主机、加湿底座、循环泵和过滤器
+    px, py = 300.0, 640.0
+    add("设备架立杆(示意)", "BUY", cyl(px, py, 0, 1500, 30))
+    stand = lambda s: s.rotate((0, 0, 0), (1, 0, 0), 90).translate((px - BX / 2, py - 20.5, 1180))
     add("主控盒", "PRINT", stand(box_body()))
     add("主控盒盖", "PRINT", stand(box_lid().translate((0, 0, BZ))))
-    add("抱杆夹(示意)", "BUY", box(-30, 30, -20.5, 16, BY / 2 - 28, BY / 2 + 28))
     gw, gh, wy = SCR_W + 2 * SCR_BEZEL_X, SCR_H + 2 * SCR_BEZEL_Y, lid_screen_y()
-    add("7 英寸触摸屏(示意)", "SCREEN", box(-gw / 2, gw / 2, -20.5 - BZ + 0.2, -20.5 - BZ + 2, wy - gh / 2, wy + gh / 2))
-    # 称重:横臂 + 固定座 + 条形称重传感器 + 挂钩
-    add("抱杆夹横臂(示意)", "BUY", box(-22, XT - 20, -50, 16, z_arm, z_arm + 30))
-    mx = XT - 40
-    add("称重传感器固定座", "PRINT", loadcell_mount().translate((mx, YT, z_arm + 36)))
-    add("条形称重传感器 80×12.7×12.7(示意)", "BUY", box(mx - 32, mx + 48, YT - 6.35, YT + 6.35, z_arm + 38, z_arm + 50.7))
-    add("挂钩(示意)", "BUY", cyl(XT, YT, z_arm - 5, z_arm + 38, 3))
-    # 输液袋、滴斗、滴斗夹
-    zbag = ZB + 75
-    add("输液袋 500 mL(示意)", "SOFT", box(XT - 60, XT + 60, YT - 14, YT + 14, zbag, zbag + 190).edges("|Y").fillet(14))
-    add("输液袋 500 mL(示意)", "SOFT", cyl(XT, YT, ZB + 60, zbag, 8))
-    add("滴斗(示意)", "SOFT", cyl(XT, YT, ZB, ZB + 60, DRIP_D))
-    add("滴斗传感器夹", "PRINT", drip_clip().rotate((0, 0, 0), (0, 0, 1), 180).translate((XT, YT, ZB + 26)))
-    # 夹管阀:固定在主控盒侧面
-    zv = BY * 0.45
-    add("常闭电磁夹管阀(示意)", "BUY", box(BX / 2, XT + 16, YT - 16, YT + 16, zv - 20, zv + 20)
-        .cut(box(XT - 3, XT + 17, YT - 3, YT + 3, zv - 21, zv + 21)))
-    # 床面和病人前臂:加温模块平放在病人手边,用绑带固定,不吊在输液管上
-    zb, bx0, by0 = -260.0, XT + 70, -330.0
-    add("床面(示意)", "BUY", box(bx0 - 40, bx0 + ox + 330, by0 - 60, by0 + 190, zb - 14, zb))
-    arm0 = bx0 + ox + 70
-    add("病人前臂(示意)", "SOFT", cq.Workplane("YZ").workplane(offset=arm0).center(by0 + 55, zb + 32).ellipse(38, 30).extrude(230))
-    for n, k, s in heater_module_parts():
-        add(n, k, s.translate((bx0, by0, zb)))
-    y_in, y_out, zt = by0 + off + RUN_Y[0], by0 + off + RUN_Y[2], zb + top
-    add("输液管", "SOFT", _tube([(XT, YT, ZB), (XT, YT, ZB - 120), (XT + 4, YT - 60, zt + 120), (bx0 - 55, y_in + 10, zt + 12), (bx0, y_in, zt)], t1=(1, 0, 0)))
-    add("输液管", "SOFT", _tube([(bx0 + ox, y_out, zt), (bx0 + ox + 45, y_out + 6, zt - 2), (arm0 + 20, by0 + 55, zb + 64)], t0=(1, 0, 0)))
-    add("加温线缆(示意)", "BUY", _tube([(-BX / 2 + 60, -20.5 - BZ / 2, 0), (-BX / 2 + 60, -80, -130), (bx0 - 20, by0 - 70, zb + 30), (bx0 + ox / 2, by0, zb + S_FLOOR + 4)], t1=(0.3, 1, 0), d=6))
+    add("7 英寸触摸屏(示意)", "SCREEN", box(px - gw / 2, px + gw / 2, py - 20.5 - BZ + 0.2, py - 20.5 - BZ + 2, 1180 + wy - gh / 2, 1180 + wy + gh / 2))
+    zsh = 960.0
+    add("设备架托板(示意)", "BUY", box(px - 190, px + 190, py - 230, py - 20, zsh - 10, zsh))
+    hx, hy = px - 100, py - 125
+    for n, k, s in humidifier_parts():
+        add(n, k, s.translate((hx, hy, zsh)))
+    add("循环泵和过滤器(示意)", "BUY", box(px + 30, px + 160, py - 190, py - 60, zsh, zsh + 90))
+    ztop = zsh + 45 + 85
+    add("加热输气管(进气)", "SOFT", _tube([(hx, hy, ztop), (hx + 20, hy - 180, ztop + 110), (tro["in"][0] - 10, tro["in"][1] + 170, ZS + 190), (tro["in"][0], tro["in"][1], ZS + 80)], t0=(0, 0, 1), t1=(0, -0.2, -1), d=10))
+    add("回气管(经过滤器)", "SOFT", _tube([(tro["out"][0], tro["out"][1], ZS + 80), (tro["out"][0] + 10, tro["out"][1] + 170, ZS + 200), (px + 110, py - 300, zsh + 230), (px + 95, py - 125, zsh + 90)], t0=(0, 0, 1), t1=(0, 0.2, -1), d=10))
     return parts
 
 
 # 名称 -> (生成函数, 做法, 中文名)
 BUILDERS = {
-    "01_plate_lower_AL6061": (lambda: plate(False), "CNC", "加温铝板 下板"),
-    "02_plate_upper_AL6061": (lambda: plate(True), "CNC", "加温铝板 上板"),
-    "03_heater_shell_lower": (lambda: heater_shell(False), "PRINT", "加温模块 下壳"),
-    "04_heater_shell_upper": (lambda: heater_shell(True), "PRINT", "加温模块 上壳"),
-    "05_drip_sensor_clip": (drip_clip, "PRINT", "滴斗传感器夹"),
-    "06_loadcell_mount": (loadcell_mount, "PRINT", "称重传感器固定座"),
-    "07_control_box_body": (box_body, "PRINT", "主控盒"),
-    "08_control_box_lid": (box_lid, "PRINT", "主控盒盖"),
+    "01_line_plate_lower_AL6061": (lambda: plate(False), "CNC", "保温铝板 下板"),
+    "02_line_plate_upper_AL6061": (lambda: plate(True), "CNC", "保温铝板 上板"),
+    "03_line_shell_lower": (lambda: heater_shell(False), "PRINT", "保温板 下壳"),
+    "04_line_shell_upper": (lambda: heater_shell(True), "PRINT", "保温板 上壳"),
+    "05_syringe_jacket_half": (syringe_jacket_half, "PRINT", "注射筒加热套 半壳(做 2 件)"),
+    "06_humidifier_plate_AL6061": (hum_plate, "CNC", "加湿铝盘"),
+    "07_humidifier_base": (hum_base, "PRINT", "加湿底座"),
+    "08_control_box_body": (box_body, "PRINT", "主控盒"),
+    "09_control_box_lid": (box_lid, "PRINT", "主控盒盖"),
 }
 VIEW_ONLY = {
     "00_plates_open_check": (heater_assembly, "VIEW", "上下铝板对合检查(上板抬起 12)"),
-    "20_heater_module": (lambda: heater_module_parts(0), "VIEW", "加温模块装配"),
-    "21_heater_module_open": (lambda: heater_module_parts(25), "VIEW", "加温模块装配(打开)"),
-    "30_full_assembly": (full_assembly, "VIEW", "整机装配(加温模块放在病人手边)"),
+    "20_line_warmer": (lambda: heater_module_parts(0), "VIEW", "高压管保温板装配"),
+    "21_line_warmer_open": (lambda: heater_module_parts(25), "VIEW", "高压管保温板装配(打开)"),
+    "22_syringe_jacket": (lambda: syringe_jacket_parts(0), "VIEW", "注射筒加热套装配"),
+    "23_humidifier": (humidifier_parts, "VIEW", "加湿加热底座装配"),
+    "30_full_assembly": (full_assembly, "VIEW", "手术室整体布置"),
 }
 
 

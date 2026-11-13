@@ -1,15 +1,12 @@
-// 输液加温监控一体机 · 样机主控固件(ESP32-DevKitC,Arduino 框架)
-// 本文件只做硬件读写、显示和联网;所有判定逻辑在 include/logic.h。
+// hPIPAC 前端加热系统 · 样机主控固件(ESP32-DevKitC,Arduino 框架)
+// 本文件只做硬件读写、指示和联网;所有判定逻辑在 include/logic.h。
 // 串口 115200 命令(整机分步测试用,输入 help 查看)。
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Wire.h>
-#include <Preferences.h>
 #include <ArduinoJson.h>
-#include <HX711.h>
 #include <Adafruit_ADS1X15.h>
-#include <U8g2lib.h>
 #include <esp_task_wdt.h>
 #include "config.h"
 #include "logic.h"
@@ -21,173 +18,126 @@
 #define PWM_ATTACH(pin, ch, freq, res) do { ledcSetup(ch, freq, res); ledcAttachPin(pin, ch); } while (0)
 #define PWM_WRITE(pin, ch, v) ledcWrite(ch, v)
 #endif
-#define CH_HEAT 0
-#define CH_CLAMP 1
+#define PWM_MAX 1023                      // 10 位
+#define PWM_CH_PUMP 4                     // 加热四路用 LEDC 通道 0–3(1 kHz),泵用通道 4(20 kHz)
 
-Adafruit_ADS1115 ads;
-HX711 scale;
-#if HAS_OLED
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
-#endif
-Preferences prefs;
+static const uint8_t HEAT_PIN[H_COUNT] = {PIN_HEAT_SYR, PIN_HEAT_LINE, PIN_HEAT_HUM, PIN_HEAT_TUBE};
+
+Adafruit_ADS1115 ads[3];
+static const uint8_t ADS_ADDR[3] = {ADS_ADDR_1, ADS_ADDR_2, ADS_ADDR_3};
+bool adsOk[3] = {false, false, false};
+
 Core core;
-
-bool adsOk = false, scaleOk = false, netOk = false, logCsv = false, rawDrop = false;
-float tPlate1 = NAN, tPlate2 = NAN, tOutlet = NAN, tAmbient = NAN;
-float heatDuty = 0, heatInteg = 0;
-float weightG = 0, weightStart = 0, scaleFactor = 420.0f;
-long scaleOffset = 0;
-float flowDrop = 0, flowWeight = NAN, flowCal = 1.0f, flowShown = 0, dpm = 0, remMl = 0;
-uint32_t dropsAtStart = 0;
-int batPct = -1;
-
-// ---------- 液滴检测(1 kHz 采样任务)----------
-portMUX_TYPE dropMux = portMUX_INITIALIZER_UNLOCKED;
-volatile uint32_t dropCount = 0, lastDropMs = 0;
-volatile uint32_t dropIv[6] = {0}; volatile uint8_t dropIvN = 0, dropIvI = 0;
-volatile float dropBase = 0, dropNoise = 0; volatile int dropRaw = 0;
-
-void dropTask(void *) {
-  float base = analogRead(PIN_DROP), noise = 10;
-  bool inDrop = false; uint32_t tIn = 0;
-  for (;;) {
-    int x = analogRead(PIN_DROP);
-    uint32_t now = millis();
-    float dev = fabsf(x - base);
-    float thr = fmaxf((float)DROP_MIN_DELTA, 6.0f * noise);
-    if (!inDrop) {
-      if (dev > thr && now - lastDropMs > DROP_REFRACT_MS) {
-        inDrop = true; tIn = now;
-        portENTER_CRITICAL(&dropMux);
-        if (lastDropMs) { dropIv[dropIvI] = now - lastDropMs; dropIvI = (dropIvI + 1) % 6; if (dropIvN < 6) dropIvN++; }
-        lastDropMs = now; dropCount++;
-        portEXIT_CRITICAL(&dropMux);
-      } else {
-        base += (x - base) * 0.002f;
-        noise += (dev - noise) * 0.002f;
-      }
-    } else if (dev < thr * 0.5f) inDrop = false;
-    else if (now - tIn > 300) { base = x; inDrop = false; }   // 不是液滴,是环境光或液面变化
-    dropBase = base; dropNoise = noise; dropRaw = x;
-    vTaskDelay(1);
-  }
-}
-
-void updateDropFlow(uint32_t now) {
-  uint32_t iv[6], n, last;
-  portENTER_CRITICAL(&dropMux);
-  n = dropIvN; last = lastDropMs; for (int i = 0; i < 6; i++) iv[i] = dropIv[i];
-  portEXIT_CRITICAL(&dropMux);
-  if (n == 0 || !last) { dpm = 0; flowDrop = 0; return; }
-  float mean = 0; for (uint32_t i = 0; i < n; i++) mean += iv[i]; mean /= n;
-  float since = now - last;
-  float eff = since > 2 * mean ? since : mean;            // 滴得变慢时让读数跟着降
-  dpm = since > 30000 ? 0 : 60000.0f / eff;
-  flowDrop = dpm * 60.0f / core.df;
-}
-void resetDropStats() {
-  portENTER_CRITICAL(&dropMux); dropIvN = 0; dropIvI = 0; lastDropMs = 0; portEXIT_CRITICAL(&dropMux);
-}
-
-// ---------- 温度 ----------
-float ntcTemp(float v, float vref, float offset) {
-  if (v < 0.05f || v > vref - 0.05f) return NAN;          // 开路或短路
-  float r = NTC_R_FIXED * (vref - v) / v;                  // NTC 接电源侧
-  return 1.0f / (1.0f / 298.15f + logf(r / NTC_R0) / NTC_BETA) - 273.15f + offset;
-}
-void readTemps() {
-  if (adsOk) {
-    float vref = ads.computeVolts(ads.readADC_SingleEnded(3));
-    if (vref < 3.0f || vref > 3.6f) { tPlate1 = tPlate2 = tOutlet = NAN; }
-    else {
-      tPlate1 = ntcTemp(ads.computeVolts(ads.readADC_SingleEnded(0)), vref, OFFSET_PLATE1);
-      tPlate2 = ntcTemp(ads.computeVolts(ads.readADC_SingleEnded(1)), vref, OFFSET_PLATE2);
-      tOutlet = ntcTemp(ads.computeVolts(ads.readADC_SingleEnded(2)), vref, OFFSET_OUTLET);
-    }
-  }
-  uint32_t mv = 0; for (int i = 0; i < 8; i++) mv += analogReadMilliVolts(PIN_AMBIENT);
-  float a = ntcTemp(mv / 8000.0f, 3.3f, OFFSET_AMBIENT);
-  tAmbient = isnan(a) ? NAN : (isnan(tAmbient) ? a : tAmbient + (a - tAmbient) * 0.05f);
-}
-
-// ---------- 称重 ----------
-struct WSample { uint32_t t; float w; };
-WSample wbuf[24]; uint8_t wN = 0, wI = 0; uint32_t wLast = 0;
-void resetWeightFlow() { wN = wI = 0; flowWeight = NAN; flowCal = 1.0f; }
-void readScale(uint32_t now) {
-  if (!HAS_SCALE || !scale.is_ready()) return;
-  float w = (scale.read() - scaleOffset) / scaleFactor;
-  weightG = scaleOk ? weightG + (w - weightG) * 0.15f : w;
-  scaleOk = true;
-  if (core.st == RUN && now - wLast >= 5000) {            // 每 5 s 记一点,最近 2 分钟做线性回归
-    wLast = now; wbuf[wI] = {now, weightG}; wI = (wI + 1) % 24; if (wN < 24) wN++;
-    if (wN >= 12) {
-      double st = 0, sw = 0, stt = 0, stw = 0; uint32_t t0 = wbuf[(wI + 24 - wN) % 24].t;
-      for (int i = 0; i < wN; i++) { WSample &s = wbuf[(wI + 24 - wN + i) % 24]; double t = (s.t - t0) / 3600000.0;
-        st += t; sw += s.w; stt += t * t; stw += t * s.w; }
-      double den = wN * stt - st * st;
-      flowWeight = den > 0 ? (float)(-(wN * stw - st * sw) / den) : NAN;   // g/h ≈ mL/h
-      if (!isnan(flowWeight) && flowDrop > 10 && flowWeight > 10) {
-        float k = flowWeight / flowDrop; k = constrain(k, 0.7f, 1.3f);
-        flowCal += (k - flowCal) * 0.1f;                    // 用称重慢慢修正滴系数误差
-      }
-    }
-  }
-}
+Ctrl ctrl;
+Inputs sens;                              // 最近一次读数
+bool netOk = false, logCsv = false;
 
 // ---------- 执行器 ----------
-uint32_t clampSince = 0; bool clampState = false;
-void driveClamp(bool open, uint32_t now) {
-  if (open && !clampState) clampSince = now;
-  clampState = open;
-  float d = !open ? 0 : (now - clampSince < CLAMP_PULL_MS ? 1.0f : CLAMP_HOLD_DUTY);
-  PWM_WRITE(PIN_CLAMP, CH_CLAMP, (uint32_t)(d * 1023));
+// 把全部输出置于安全状态:四路加热关、加热总开关断开、泵停
+void outputsSafe() {
+  digitalWrite(PIN_HEAT_EN, LOW);
+  for (int h = 0; h < H_COUNT; h++) PWM_WRITE(HEAT_PIN[h], h, 0);
+  PWM_WRITE(PIN_PUMP, PWM_CH_PUMP, 0);
 }
-void driveHeater() {                                        // 每 200 ms
-  if (core.plateSet <= 0 || isnan(tPlate1)) { heatDuty = 0; heatInteg = 0; digitalWrite(PIN_HEAT_EN, LOW); }
-  else {
-    digitalWrite(PIN_HEAT_EN, HIGH);
-    float err = core.plateSet - tPlate1;
-    heatInteg = constrain(heatInteg + HEAT_KI * err * 0.2f, 0.0f, 1.0f);
-    if (err < -0.5f) heatInteg = 0;
-    heatDuty = constrain(HEAT_KP * err + heatInteg, 0.0f, HEAT_DUTY_MAX);
+void driveOutputs() {
+  bool any = false;
+  for (int h = 0; h < H_COUNT; h++) {
+    float d = core.out.on[h] ? ctrl.duty[h] : 0;      // 不允许加热的通路,无论 PI 算出什么都写 0
+    if (d > 0) any = true;
+    PWM_WRITE(HEAT_PIN[h], h, (uint32_t)(d * PWM_MAX));
   }
-  PWM_WRITE(PIN_HEAT_PWM, CH_HEAT, (uint32_t)(heatDuty * 1023));
+  digitalWrite(PIN_HEAT_EN, any ? HIGH : LOW);        // 没有任何一路出力时断开加热总开关
+  PWM_WRITE(PIN_PUMP, PWM_CH_PUMP, (uint32_t)((core.out.pumpOn ? ctrl.pumpDuty : 0) * PWM_MAX));
 }
+
+// ---------- 传感器 ----------
+float adsVolts(int chip, int ch) {
+  if (!adsOk[chip]) return NAN;
+  return ads[chip].computeVolts(ads[chip].readADC_SingleEnded(ch));
+}
+float ntcTemp(float v, float vref, float offset) {
+  if (!(v >= 0.05f) || !(v <= vref - 0.05f)) return NAN;   // 开路、短路或芯片没应答
+  float r = NTC_R_FIXED * (vref - v) / v;                   // NTC 接电源侧
+  return 1.0f / (1.0f / 298.15f + logf(r / NTC_R0) / NTC_BETA) - 273.15f + offset;
+}
+void readSensors() {
+  // 通道分配见 config.h 的表
+  float vref = adsVolts(0, 3);
+  bool refOk = vref >= 3.0f && vref <= 3.6f;               // 基准不对:全部温度按读不到处理
+  auto T = [&](int chip, int ch, float off) { return refOk ? ntcTemp(adsVolts(chip, ch), vref, off) : NAN; };
+  sens.syr1     = T(0, 0, OFFSET_SYR1);
+  sens.line1    = T(0, 1, OFFSET_LINE1);
+  sens.humOut   = T(0, 2, OFFSET_HUMOUT);
+  sens.syr2     = T(1, 0, OFFSET_SYR2);
+  sens.line2    = T(1, 1, OFFSET_LINE2);
+  sens.humPlate = T(1, 2, OFFSET_HUMPLATE);
+  sens.gasEnd   = T(1, 3, OFFSET_GASEND);
+  sens.lineOut  = T(2, 0, OFFSET_LINEOUT);
+#if HAS_IP_PROBES
+  sens.ip1 = T(2, 1, OFFSET_IP1);
+  sens.ip2 = T(2, 2, OFFSET_IP2);
+#else
+  sens.ip1 = sens.ip2 = NAN;
+#endif
+#if HAS_PRESSURE
+  float vp = adsVolts(2, 3) * PRESS_DIVIDER;               // 还原成传感器输出电压
+  // 低于 0.25 V 或高于 4.75 V:断线或短路
+  sens.press = (vp >= 0.25f && vp <= 4.75f) ? (vp - PRESS_V_ZERO) / PRESS_V_SPAN * PRESS_RANGE + OFFSET_PRESS : NAN;
+  sens.pressFitted = true;
+#else
+  sens.press = NAN; sens.pressFitted = false;
+#endif
+#if HAS_LID_SWITCH
+  sens.lidClosed = digitalRead(PIN_LID) == LOW;
+#else
+  sens.lidClosed = true;
+#endif
+}
+
+// ---------- 指示 ----------
 void driveSignals(uint32_t now) {
   uint16_t a = core.alarms, aud = audible(core, now);
   bool hi = a & A_HIGH, med = a & ~A_HIGH;
-  bool fast = (now / 200) % 2, slow = (now % 2000) < 200;
-  digitalWrite(PIN_LED_R, hi && fast);
-  digitalWrite(PIN_LED_Y, !hi && (med || core.st == PAUSE));
-  digitalWrite(PIN_LED_G, core.st == RUN || (core.st == READY && (now / 500) % 2));
-  digitalWrite(PIN_BUZZER, (aud & A_HIGH) ? fast : ((aud & ~A_HIGH) ? slow : false));
+  bool fast = (now / 200) % 2, slow = (now / 1000) % 2, beep = (now % 2000) < 200;
+  digitalWrite(PIN_LED_R, hi && fast);                                        // 高级报警:红灯快闪
+  digitalWrite(PIN_LED_Y, med);                                               // 中级报警:黄灯亮
+  bool steady = core.ph == READY || core.ph == NEBULIZE || core.ph == EXPOSE;
+  digitalWrite(PIN_LED_G, steady || (core.ph == PREHEAT && slow));            // 预热:绿灯慢闪
+  digitalWrite(PIN_BUZZER, (aud & A_HIGH) ? fast : ((aud & ~A_HIGH) ? beep : false));
 }
 
-// ---------- 动作 ----------
-void doStart(float vol, float rate, float temp, int df, const char *task) {
-  uint32_t now = millis();
-  if (!coreStart(core, now, vol, rate, temp, df, task)) { Serial.println("ERR start refused"); return; }
-  weightStart = weightG; dropsAtStart = dropCount; resetDropStats(); resetWeightFlow(); remMl = vol;
-}
-void doResume() { if (coreResume(core, millis())) { resetDropStats(); wN = wI = 0; } else Serial.println("ERR resume refused"); }
-
-// ---------- 联网(独立任务,不阻塞控制)----------
-struct Cmd { char c[8]; float v, vol, rate, temp; int df; char task[12]; };
+// ---------- 命令 ----------
+struct Cmd { char kind[16]; float value; };
 QueueHandle_t cmdQ; SemaphoreHandle_t snapMux; String snapJson;
 
-void buildSnapshot() {
+void runCmd(const char *kind, float value, const char *from) {
+  bool ok = coreCommand(core, millis(), kind, value);
+  if (ok && !strcmp(kind, "abort")) outputsSafe();          // 中止:不等下一个控制周期,立即关
+  Serial.printf("%s %s %s -> %s\n", ok ? "OK" : "ERR", from, kind, ok ? PHASE_NAME[core.ph] : "拒绝(超范围或当前阶段不允许)");
+}
+
+// ---------- 联网(独立任务,不阻塞控制)----------
+static void putT(JsonObject o, const char *k, float v) {
+  if (isnan(v)) o[k] = nullptr; else o[k] = round(v * 100) / 100.0;
+}
+void buildSnapshot(uint32_t now) {
   JsonDocument d;
-  d["id"] = DEVICE_ID; d["st"] = STATE_NAME[core.st == BENCH ? IDLE : core.st]; d["task"] = core.task[0] ? core.task : nullptr;
-  d["tp"] = isnan(tPlate1) ? 0 : round(tPlate1 * 100) / 100.0; d["to"] = isnan(core.delivered) ? 0 : round(core.delivered * 100) / 100.0;
-  d["tw"] = isnan(tOutlet) ? 0 : round(tOutlet * 100) / 100.0;
-  d["ts"] = core.tempSet; d["fl"] = round(flowShown * 10) / 10.0; d["fs"] = core.rateSet; d["dpm"] = round(dpm * 10) / 10.0;
-  d["w"] = round(weightG * 10) / 10.0; d["rem"] = round(remMl * 10) / 10.0;
-  d["eta"] = (core.st == RUN && flowShown > 1) ? round(remMl / flowShown * 600) / 10.0 : -1;
-  d["heat"] = (int)(heatDuty * 100); d["clamp"] = clampState ? 1 : 0;
-  if (batPct >= 0) d["bat"] = batPct;
+  d["id"] = DEVICE_ID; d["ph"] = PHASE_NAME[core.ph];
+  d["target"] = round(core.target * 10) / 10.0; d["exposeMin"] = core.exposeMin;
+  d["flowSet"] = round(core.flowSet * 10) / 10.0; d["circInExpose"] = core.circInExpose;
+  JsonObject t = d["t"].to<JsonObject>();
+  putT(t, "syr1", sens.syr1); putT(t, "syr2", sens.syr2); putT(t, "line1", sens.line1); putT(t, "line2", sens.line2);
+  putT(t, "lineOut", sens.lineOut); putT(t, "humPlate", sens.humPlate); putT(t, "humOut", sens.humOut);
+  putT(t, "gasEnd", sens.gasEnd); putT(t, "ip1", sens.ip1); putT(t, "ip2", sens.ip2);
+  if (isnan(sens.press)) d["press"] = nullptr; else d["press"] = round(sens.press * 10) / 10.0;
+  d["flow"] = round(flowEstimate(ctrl.pumpDuty) * 10) / 10.0;      // 按占空比估算,不是实测
+  JsonObject du = d["duty"].to<JsonObject>();
+  for (int h = 0; h < H_COUNT; h++) du[HEATER_NAME[h]] = (int)lroundf(ctrl.duty[h] * 100);
+  du["pump"] = (int)lroundf(ctrl.pumpDuty * 100);
+  d["phSec"] = phaseSec(core, now); d["exposeLeft"] = exposeLeftSec(core, now);
   JsonArray al = d["al"].to<JsonArray>();
   for (int i = 0; i < ALARM_COUNT; i++) if (core.alarms & (1 << i)) al.add(ALARM_NAME[i]);
+  d["muted"] = isMuted(core, now);
   String s; serializeJson(d, s);
   xSemaphoreTake(snapMux, portMAX_DELAY); snapJson = s; xSemaphoreGive(snapMux);
 }
@@ -209,102 +159,93 @@ void netTask(void *) {
       JsonDocument r;
       if (!deserializeJson(r, http.getString())) {
         for (JsonObject c : r["cmds"].as<JsonArray>()) {
-          Cmd m = {}; strlcpy(m.c, c["c"] | "", sizeof(m.c)); m.v = c["v"] | 0.0f;
-          m.vol = c["vol"] | 0.0f; m.rate = c["rate"] | 0.0f; m.temp = c["temp"] | 0.0f; m.df = c["df"] | 20;
-          strlcpy(m.task, c["task"] | "", sizeof(m.task));
-          xQueueSend(cmdQ, &m, 0);
+          Cmd m = {}; strlcpy(m.kind, c["kind"] | "", sizeof(m.kind));
+          JsonVariant v = c["value"];
+          m.value = v.is<bool>() ? (v.as<bool>() ? 1.0f : 0.0f) : (v.is<float>() ? v.as<float>() : NAN);
+          xQueueSend(cmdQ, &m, 0);                          // 交给主循环执行
         }
-        Cmd m = {};
-        if (!r["task"].isNull()) { strlcpy(m.c, "ready", sizeof(m.c)); m.temp = r["task"]["temp"] | 0.0f; strlcpy(m.task, r["task"]["id"] | "", sizeof(m.task)); }
-        else strlcpy(m.c, "unready", sizeof(m.c));
-        xQueueSend(cmdQ, &m, 0);
       }
     }
     http.end();
   }
 }
 
-void handleCmd(const Cmd &m) {
-  if (!strcmp(m.c, "ready")) coreReady(core, m.temp, m.task);
-  else if (!strcmp(m.c, "unready")) coreUnready(core);
-  else if (!strcmp(m.c, "start")) doStart(m.vol, m.rate, m.temp, m.df, m.task);
-  else if (!strcmp(m.c, "pause")) corePause(core);
-  else if (!strcmp(m.c, "resume")) doResume();
-  else if (!strcmp(m.c, "mute")) coreMute(core, millis());
-  else if (!strcmp(m.c, "finish")) coreFinish(core);
-  else if (!strcmp(m.c, "rate") && m.v > 0) core.rateSet = m.v;
-  else if (!strcmp(m.c, "temp")) core.tempSet = m.v <= 0 ? 0 : constrain(m.v, TEMP_SET_MIN, PLATE_MAX);
-}
-
 // ---------- 串口命令(分步测试)----------
 void help() {
-  Serial.println(F("status | log 1/0 (每秒一行CSV) | raw 1/0 (滴斗原始信号)\n"
-                   "tare (空钩去皮) | cal <克> (挂已知砝码标定) \n"
-                   "plate <℃> (台架:固定板温,0关) | clamp 1/0 (台架:开关夹管阀)\n"
-                   "start <mL> <mL/h> <℃> <滴系数> (不经服务器本地开始) | pause | resume | finish | mute"));
+  Serial.println(F(
+    "status                      看一次全部读数和状态\n"
+    "log 1|0                     每秒一行 CSV\n"
+    "heat <syr|line|hum|tube> <占空比%>   手动加热,只在 IDLE;过温保护照常;0 = 关;10 分钟自动关\n"
+    "pump <占空比%>              手动转泵,只在 IDLE;0 = 关\n"
+    "preheat | ready | nebulize | expose | evac | finish | abort | ack | mute\n"
+    "target <37.0-43.0> | flow <0-15> | exposeMin <1-60> | circInExpose <1|0>"));
 }
 void status() {
-  Serial.printf("st=%s alarms=0x%03X plate=%.2f/%.2f set=%.2f duty=%.0f%% outlet=%.2f amb=%.2f lid=%d\n",
-                STATE_NAME[core.st], core.alarms, tPlate1, tPlate2, core.plateSet, heatDuty * 100, tOutlet, tAmbient,
-                HAS_LID_SWITCH ? digitalRead(PIN_LID) == LOW : 1);
-  Serial.printf("drops=%lu dpm=%.1f flowDrop=%.1f flowWeight=%.1f cal=%.2f weight=%.1fg rem=%.1f clamp=%d wifi=%d ads=%d\n",
-                (unsigned long)dropCount, dpm, flowDrop, flowWeight, flowCal, weightG, remMl, clampState, netOk, adsOk);
+  uint32_t now = millis();
+  Serial.printf("ph=%s phSec=%lu exposeLeft=%ld target=%.1f flowSet=%.1f exposeMin=%d circInExpose=%d\n",
+                PHASE_NAME[core.ph], (unsigned long)phaseSec(core, now), (long)exposeLeftSec(core, now),
+                core.target, core.flowSet, core.exposeMin, core.circInExpose);
+  Serial.printf("syr=%.2f/%.2f line=%.2f/%.2f lineOut=%.2f humPlate=%.2f humOut=%.2f gasEnd=%.2f ip=%.2f/%.2f press=%.1f lid=%d\n",
+                sens.syr1, sens.syr2, sens.line1, sens.line2, sens.lineOut, sens.humPlate, sens.humOut, sens.gasEnd,
+                sens.ip1, sens.ip2, sens.press, sens.lidClosed);
+  Serial.printf("set=%.1f/%.1f/%.1f/%.1f duty%%=%.0f/%.0f/%.0f/%.0f pump%%=%.0f flow~%.1f (syr/line/hum/tube)\n",
+                core.out.set[0], core.out.set[1], core.out.set[2], core.out.set[3],
+                ctrl.duty[0] * 100, ctrl.duty[1] * 100, ctrl.duty[2] * 100, ctrl.duty[3] * 100,
+                ctrl.pumpDuty * 100, flowEstimate(ctrl.pumpDuty));
+  Serial.printf("alarms=0x%03X faults=0x%02X muted=%d wifi=%d ads=%d%d%d\n", core.alarms, core.faults,
+                isMuted(core, now), netOk, adsOk[0], adsOk[1], adsOk[2]);
+  for (int i = 0; i < ALARM_COUNT; i++) if (core.alarms & (1 << i)) Serial.printf("  报警: %s\n", ALARM_NAME[i]);
 }
 void serialCmd(String s) {
   s.trim(); if (!s.length()) return;
-  float a = 0, b = 0, c = 0; int d = 20; char w[12] = "";
-  sscanf(s.c_str(), "%11s %f %f %f %d", w, &a, &b, &c, &d);
+  char w[16] = "", a1[16] = ""; float a2 = NAN;
+  int n = sscanf(s.c_str(), "%15s %15s %f", w, a1, &a2);
+  float v = NAN;                                            // 第一个参数按数字解析,不是数字就是 NAN
+  if (n >= 2) { char *end; float x = strtof(a1, &end); if (end != a1 && *end == 0) v = x; }
+  uint32_t now = millis();
   if (!strcmp(w, "help")) help();
   else if (!strcmp(w, "status")) status();
-  else if (!strcmp(w, "log")) { logCsv = a > 0; if (logCsv) Serial.println("ms,state,plate1,plate2,plate_set,duty,outlet,ambient,dpm,flow,flow_w,weight,rem,alarms"); }
-  else if (!strcmp(w, "raw")) rawDrop = a > 0;
-  else if (!strcmp(w, "tare")) { scaleOffset = scale.read_average(20); prefs.putLong("off", scaleOffset); Serial.println("OK tare"); }
-  else if (!strcmp(w, "cal") && a > 0) { scaleFactor = (scale.read_average(20) - scaleOffset) / a; prefs.putFloat("fac", scaleFactor); Serial.printf("OK factor=%.3f\n", scaleFactor); }
-  else if (!strcmp(w, "plate")) { if (core.st == IDLE || core.st == BENCH) { core.st = a > 0 || core.benchClamp ? BENCH : IDLE; core.benchPlate = a; } }
-  else if (!strcmp(w, "clamp")) { if (core.st == IDLE || core.st == BENCH) { core.benchClamp = a > 0; core.st = core.benchClamp || core.benchPlate > 0 ? BENCH : IDLE; } }
-  else if (!strcmp(w, "start")) { if (core.st == BENCH) coreFinish(core); doStart(a, b, c, d, "LOCAL"); }
-  else if (!strcmp(w, "pause")) corePause(core);
-  else if (!strcmp(w, "resume")) doResume();
-  else if (!strcmp(w, "finish")) coreFinish(core);
-  else if (!strcmp(w, "mute")) coreMute(core, millis());
+  else if (!strcmp(w, "log")) {
+    logCsv = v > 0;
+    if (logCsv) Serial.println("ms,ph,syr1,syr2,line1,line2,lineOut,humPlate,humOut,gasEnd,ip1,ip2,press,duty_syr,duty_line,duty_hum,duty_tube,duty_pump,alarms");
+  }
+  else if (!strcmp(w, "heat")) {
+    int h = -1; for (int i = 0; i < H_COUNT; i++) if (!strcmp(a1, HEATER_NAME[i])) h = i;
+    bool ok = n >= 3 && cmdManualHeat(core, now, h, a2 / 100.0f);
+    Serial.println(ok ? "OK heat" : "ERR heat 拒绝(只在 IDLE、无高级报警、0-100)");
+  }
+  else if (!strcmp(w, "pump")) {
+    bool ok = cmdManualPump(core, now, v / 100.0f);
+    Serial.println(ok ? "OK pump" : "ERR pump 拒绝(只在 IDLE、无高级报警、0-100)");
+  }
+  else if (!strcmp(w, "preheat") || !strcmp(w, "ready") || !strcmp(w, "nebulize") || !strcmp(w, "expose") ||
+           !strcmp(w, "evac") || !strcmp(w, "finish") || !strcmp(w, "abort") || !strcmp(w, "ack") || !strcmp(w, "mute") ||
+           !strcmp(w, "target") || !strcmp(w, "flow") || !strcmp(w, "exposeMin") || !strcmp(w, "circInExpose"))
+    runCmd(w, v, "serial");
   else Serial.println("? 输入 help");
 }
 
-// ---------- 显示(可选的 OLED 小屏;主显示是触摸屏上的床旁页面) ----------
-void drawOled() {
-#if HAS_OLED
-  char l[4][24];
-  snprintf(l[0], 24, "%s %s%s", STATE_NAME[core.st], netOk ? "NET" : "---", core.alarms ? " !" : "");
-  if (core.tempSet > 0 || core.st == BENCH) snprintf(l[1], 24, "T %.1f/%.1fC", isnan(core.delivered) ? 0 : core.delivered, core.st == BENCH ? core.benchPlate : core.tempSet);
-  else snprintf(l[1], 24, "T off  %.1fC", isnan(tAmbient) ? 0 : tAmbient);
-  snprintf(l[2], 24, "F %.0f/%.0f mL/h", flowShown, core.rateSet);
-  if (core.alarms) { int i = 0; while (i < ALARM_COUNT && !(core.alarms & (1 << i))) i++; snprintf(l[3], 24, "ALM %s", ALARM_NAME[i]); }
-  else if (core.st == RUN && flowShown > 1) snprintf(l[3], 24, "R %.0fmL %.0fmin", remMl, remMl / flowShown * 60);
-  else snprintf(l[3], 24, "R %.0fmL  W %.0fg", remMl, weightG);
-  oled.clearBuffer(); oled.setFont(u8g2_font_7x14B_tr);
-  for (int i = 0; i < 4; i++) oled.drawStr(0, 14 + i * 16, l[i]);
-  oled.sendBuffer();
-#endif
-}
-
 void setup() {
-  // 先把所有执行器置于安全状态:加热关,夹管阀断电夹闭
+  // 先把所有执行器置于安全状态:加热总开关断开、四路加热关、泵停。
+  // 看门狗复位或任何其他复位后都从这里重新开始,阶段回到 IDLE。
   pinMode(PIN_HEAT_EN, OUTPUT); digitalWrite(PIN_HEAT_EN, LOW);
-  PWM_ATTACH(PIN_HEAT_PWM, CH_HEAT, 1000, 10); PWM_WRITE(PIN_HEAT_PWM, CH_HEAT, 0);
-  PWM_ATTACH(PIN_CLAMP, CH_CLAMP, 20000, 10); PWM_WRITE(PIN_CLAMP, CH_CLAMP, 0);
-  for (int p : {PIN_BUZZER, PIN_LED_R, PIN_LED_Y, PIN_LED_G, PIN_DROP_LED}) { pinMode(p, OUTPUT); digitalWrite(p, LOW); }
-  pinMode(PIN_BTN_STOP, INPUT_PULLUP); pinMode(PIN_BTN_MUTE, INPUT_PULLUP); pinMode(PIN_LID, INPUT);
-  digitalWrite(PIN_DROP_LED, HIGH);
+  for (int h = 0; h < H_COUNT; h++) {
+    pinMode(HEAT_PIN[h], OUTPUT); digitalWrite(HEAT_PIN[h], LOW);
+    PWM_ATTACH(HEAT_PIN[h], h, 1000, 10);
+  }
+  pinMode(PIN_PUMP, OUTPUT); digitalWrite(PIN_PUMP, LOW);
+  PWM_ATTACH(PIN_PUMP, PWM_CH_PUMP, 20000, 10);
+  outputsSafe();
+  for (int p : {PIN_BUZZER, PIN_LED_R, PIN_LED_Y, PIN_LED_G}) { pinMode(p, OUTPUT); digitalWrite(p, LOW); }
+  pinMode(PIN_BTN_ABORT, INPUT_PULLUP); pinMode(PIN_BTN_MUTE, INPUT_PULLUP); pinMode(PIN_LID, INPUT);
+
   Serial.begin(115200);
-  Wire.begin(PIN_SDA, PIN_SCL);
-  adsOk = ads.begin(0x48); if (adsOk) { ads.setGain(GAIN_ONE); ads.setDataRate(RATE_ADS1115_250SPS); }
-#if HAS_OLED
-  oled.begin();
-#endif
-  prefs.begin("iw", false); scaleOffset = prefs.getLong("off", 0); scaleFactor = prefs.getFloat("fac", 420.0f);
-  if (HAS_SCALE) scale.begin(PIN_HX_DT, PIN_HX_SCK);
+  Wire.begin(PIN_SDA, PIN_SCL); Wire.setClock(400000);
+  for (int i = 0; i < 3; i++) {
+    adsOk[i] = ads[i].begin(ADS_ADDR[i]);
+    if (adsOk[i]) { ads[i].setGain(GAIN_ONE); ads[i].setDataRate(RATE_ADS1115_475SPS); }   // ±4.096 V;12 个通道约 50 ms 读完
+  }
   cmdQ = xQueueCreate(16, sizeof(Cmd)); snapMux = xSemaphoreCreateMutex();
-  xTaskCreatePinnedToCore(dropTask, "drop", 3072, nullptr, 3, nullptr, 1);
   xTaskCreatePinnedToCore(netTask, "net", 8192, nullptr, 1, nullptr, 0);
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
   esp_task_wdt_config_t wc = {.timeout_ms = 5000, .idle_core_mask = 0, .trigger_panic = true};
@@ -312,59 +253,47 @@ void setup() {
 #else
   esp_task_wdt_init(5, true);
 #endif
-  esp_task_wdt_add(nullptr);                                // 主循环卡死 5 s 即复位;复位后执行器回到安全状态
-  Serial.printf("\n%s ready. ads=%d  输入 help 查看命令\n", DEVICE_ID, adsOk);
+  esp_task_wdt_add(nullptr);                                // 主循环卡死 5 s 即复位;复位后输出回到安全状态
+  Serial.printf("\n%s ready. reset=%d ads=%d%d%d  输入 help 查看命令\n", DEVICE_ID, (int)esp_reset_reason(),
+                adsOk[0], adsOk[1], adsOk[2]);
 }
 
 void loop() {
-  static uint32_t t200 = 0, t1000 = 0, tBtn = 0; static bool bStop = false, bMute = false;
+  static uint32_t t200 = 0, t1000 = 0, tBtn = 0; static bool bAbort = false, bMute = false;
   uint32_t now = millis();
   esp_task_wdt_reset();
 
   if (Serial.available()) serialCmd(Serial.readStringUntil('\n'));
-  Cmd m; while (xQueueReceive(cmdQ, &m, 0)) handleCmd(m);
+  Cmd m; while (xQueueReceive(cmdQ, &m, 0)) runCmd(m.kind, m.value, "net");
 
   if (now - tBtn >= 30) {                                   // 按键(下降沿)
     tBtn = now;
-    bool s = digitalRead(PIN_BTN_STOP) == LOW, u = digitalRead(PIN_BTN_MUTE) == LOW;
-    if (s && !bStop) { if (core.st == RUN) corePause(core); else if (core.st == PAUSE) doResume(); else if (core.st == DONE) coreFinish(core); }
-    if (u && !bMute) coreMute(core, now);
-    bStop = s; bMute = u;
+    bool s = digitalRead(PIN_BTN_ABORT) == LOW, u = digitalRead(PIN_BTN_MUTE) == LOW;
+    // 暂停(中止)键:只在预热到暴露之间起作用;IDLE、EVAC、DONE 时按了没有效果
+    if (s && !bAbort && core.ph >= PREHEAT && core.ph <= EXPOSE) runCmd("abort", NAN, "button");
+    if (u && !bMute) cmdMute(core, now);
+    bAbort = s; bMute = u;
   }
 
-  readScale(now);
-
-  if (now - t200 >= 200) {
+  if (now - t200 >= 200) {                                  // 控制周期
     t200 = now;
-    readTemps();
-    updateDropFlow(now);
-    if (core.st == RUN || core.st == PAUSE) {
-      float byDrops = core.vol - (dropCount - dropsAtStart) / (float)core.df * flowCal;
-      remMl = fmaxf(0, (HAS_SCALE && scaleOk) ? core.vol - (weightStart - weightG) : byDrops);
-    }
-    flowShown = (core.st == RUN) ? flowDrop * flowCal : 0;
-#if HAS_BATTERY
-    float vb = analogReadMilliVolts(PIN_VBAT) / 1000.0f * (122.0f / 22.0f);
-    batPct = constrain((int)((vb - 13.2f) / (16.4f - 13.2f) * 100), 0, 100);
-#endif
-    Inputs in;
-    in.now = now; in.plate1 = tPlate1; in.plate2 = tPlate2; in.ambient = tAmbient;
-    in.lidClosed = HAS_LID_SWITCH ? digitalRead(PIN_LID) == LOW : true;
-    in.flow = flowShown; in.msSinceDrop = lastDropMs ? now - lastDropMs : 0xFFFFFFFF; in.rem = remMl; in.bat = batPct;
-    State before = core.st;
-    coreStep(core, in);
-    if (before == RUN && core.st != RUN) Serial.printf("STOP -> %s alarms=0x%03X\n", STATE_NAME[core.st], core.alarms);
-    driveHeater();
-    buildSnapshot();
+    readSensors();
+    sens.now = now;
+    Phase before = core.ph; uint16_t alBefore = core.alarms;
+    coreStep(core, sens);
+    controlStep(ctrl, core, sens, CONTROL_DT);
+    driveOutputs();
+    if (before != core.ph) Serial.printf("PHASE %s -> %s\n", PHASE_NAME[before], PHASE_NAME[core.ph]);
+    if (alBefore != core.alarms) Serial.printf("ALARMS 0x%03X -> 0x%03X\n", alBefore, core.alarms);
+    buildSnapshot(now);
   }
-  driveClamp(core.clampOpen, now);
   driveSignals(now);
 
   if (now - t1000 >= 1000) {
     t1000 = now;
-    drawOled();
-    if (logCsv) Serial.printf("%lu,%s,%.2f,%.2f,%.2f,%.0f,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,0x%03X\n", (unsigned long)now, STATE_NAME[core.st],
-                              tPlate1, tPlate2, core.plateSet, heatDuty * 100, tOutlet, tAmbient, dpm, flowShown, flowWeight, weightG, remMl, core.alarms);
-    if (rawDrop) Serial.printf("drop raw=%d base=%.0f noise=%.1f count=%lu\n", (int)dropRaw, (float)dropBase, (float)dropNoise, (unsigned long)dropCount);
+    if (logCsv) Serial.printf("%lu,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.1f,%.0f,%.0f,%.0f,%.0f,%.0f,0x%03X\n",
+                              (unsigned long)now, PHASE_NAME[core.ph], sens.syr1, sens.syr2, sens.line1, sens.line2, sens.lineOut,
+                              sens.humPlate, sens.humOut, sens.gasEnd, sens.ip1, sens.ip2, sens.press,
+                              ctrl.duty[0] * 100, ctrl.duty[1] * 100, ctrl.duty[2] * 100, ctrl.duty[3] * 100, ctrl.pumpDuty * 100, core.alarms);
   }
 }

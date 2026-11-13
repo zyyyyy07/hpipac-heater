@@ -2,7 +2,7 @@
 """生成发给加工厂的图纸包:每个零件一张 A3 工程图(PDF)和一份 1:1 的 DXF。尺寸取自 build.py 的当前参数。
 依赖: pip install cadquery reportlab ezdxf
 运行: python drawings.py
-输出: ../drawings/IW-drawings.pdf(8 页)、../drawings/dxf/*.dxf。三维模型在 ../models/。
+输出: ../drawings/HP-drawings.pdf(8 页)、../drawings/dxf/*.dxf。三维模型在 ../models/。
 图纸采用第一角画法,单位 mm。坐标原点是零件外形的最小角(俯视图、主视图的左下角)。
 """
 import datetime, math, os
@@ -20,10 +20,10 @@ from OCP.TopoDS import TopoDS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DR = os.path.normpath(os.path.join(HERE, "..", "drawings"))
-PDF = os.path.join(DR, "IW-drawings.pdf")
+PDF = os.path.join(DR, "HP-drawings.pdf")
 DXF = os.path.join(DR, "dxf")
 REV = "v0.1"
-PROJECT = "输液加温监控一体机 样机"
+PROJECT = "hPIPAC 前端加热系统 样机"
 
 # 视图:名称 -> (朝向观察者的方向, 图上水平方向, 图上竖直方向)
 VIEWS = {
@@ -49,7 +49,7 @@ def specs():
         "材料 6061-T6 铝合金,数控铣削。",
         "未注尺寸以同名 STEP 模型为准,未注公差 ±0.1。",
         "槽面(合模面)平面度 0.05,槽内粗糙度 Ra≤1.6。",
-        "槽中心线位置度 0.1,上下板合模后槽须对齐。",
+        "槽中心线位置度 0.1,上下板合模后槽须对齐。槽按高压管外径加工,下单前先量管径。",
         "锐边倒钝 C0.3,槽口倒角 C0.2 去毛刺。",
         "样机不做表面处理;成品做硬质阳极氧化。",
         "上板与下板为镜像件,不可互换。"]
@@ -59,29 +59,35 @@ def specs():
         + f";两个半圆弯 R{fmt(b.BEND_R)},圆心 x = {fmt(b.PL - b.TURN_X)} 和 {fmt(b.TURN_X)}。两端直槽通到板边。",
         f"测温孔自 y=0 长边钻入,孔中心距槽面 {fmt(b.PT - b.NTC_Z)}(槽底与背面正中)。"]
     return {
-        "01_plate_lower_AL6061": dict(no="IW-01", mat="6061-T6", notes=plate_notes(False), extra=groove(False), plate=False,
-                                      holes={2.5: "攻 M3 螺纹", 3.0: "φ3 H7 定位销孔", 2.2: "测温孔"}),
-        "02_plate_upper_AL6061": dict(no="IW-02", mat="6061-T6", notes=plate_notes(True), extra=groove(True), plate=True,
-                                      holes={3.4: "M3 过孔", 3.0: "φ3 H7 定位销孔", 2.2: "测温孔"}),
-        "03_heater_shell_lower": dict(no="IW-03", mat="PETG", notes=PRINT_NOTES + ["填充 30%。腔内放保温垫和下铝板。"],
-                                      extra=["壳口两端的缺口是进出管口;长边中部 8×5 开口走加热片和测温线。",
-                                             "另一条长边的两个带槽耳穿 15 mm 魔术贴绑带或挂绳,把模块固定在床栏或床面上。模块不允许吊在输液管上。"]),
-        "04_heater_shell_upper": dict(no="IW-04", mat="PETG", notes=PRINT_NOTES + ["填充 30%。腔内放保温垫和上铝板。"],
-                                      holes={7.0: "夹紧螺丝操作孔"}, extra=["壳口两端的缺口是进出管口,与下壳缺口对齐。"]),
-        "05_drip_sensor_clip": dict(no="IW-05", mat="PETG 黑色", notes=PRINT_NOTES + ["填充 30%。必须用黑色或不透光材料。"],
-                                    holes={5.2: "5 mm 红外对管安装孔,发射与接收同轴", 3.4: "M3 安装孔"},
-                                    extra=[f"中间 φ{fmt(b.DRIP_D)} 圆孔卡滴斗,前方开口宽 {fmt(b.DRIP_D - 3.5)},滴斗从开口压入。"]),
-        "06_loadcell_mount": dict(no="IW-06", mat="PETG", notes=PRINT_NOTES + ["填充 100%(受力件)。也可用 6061 铝加工。"],
-                                  holes={5.4: "M5 过孔,固定条形称重传感器", 4.4: "M4 过孔,固定到横臂"},
-                                  extra=["凸台高 2:称重传感器固定端垫高,另一端悬空受力。"]),
-        "07_control_box_body": dict(no="IW-07", mat="PETG", notes=PRINT_NOTES + ["填充 30%。开口朝上打印。"],
-                                    holes={2.6: "M3 自攻螺丝底孔(四角螺丝柱)", 8.2: "DC 电源座", 16.2: "GX16 航空插座(加温线)",
-                                           12.2: "GX12 航空插座(滴斗、称重、夹管阀)"}),
-        "08_control_box_lid": dict(no="IW-08", mat="PETG", notes=PRINT_NOTES + ["填充 30%。外表面朝下打印。"],
-                                   holes={3.4: "M3 过孔", 5.2: "φ5 指示灯(红、黄、绿)", 16.2: "暂停键 φ16", 12.2: "消音键 φ12",
+        "01_line_plate_lower_AL6061": dict(no="HP-01", mat="6061-T6", notes=plate_notes(False), extra=groove(False), plate=False,
+                                           holes={2.5: "攻 M3 螺纹", 3.0: "φ3 H7 定位销孔", 2.2: "测温孔"}),
+        "02_line_plate_upper_AL6061": dict(no="HP-02", mat="6061-T6", notes=plate_notes(True), extra=groove(True), plate=True,
+                                           holes={3.4: "M3 过孔", 3.0: "φ3 H7 定位销孔", 2.2: "测温孔"}),
+        "03_line_shell_lower": dict(no="HP-03", mat="PETG", notes=PRINT_NOTES + ["填充 30%。腔内放保温垫和下铝板。"],
+                                    extra=["壳口两端的缺口是高压管进出口;长边中部 8×5 开口走加热片和测温线。",
+                                           "另一条长边的两个带槽耳穿 15 mm 绑带,把保温板固定在手术台边。保温板不允许吊在高压管上。"]),
+        "04_line_shell_upper": dict(no="HP-04", mat="PETG", notes=PRINT_NOTES + ["填充 30%。腔内放保温垫和上铝板。"],
+                                    holes={7.0: "夹紧螺丝操作孔"}, extra=["壳口两端的缺口是高压管进出口,与下壳缺口对齐。"]),
+        "05_syringe_jacket_half": dict(no="HP-05", mat="PETG", notes=PRINT_NOTES + ["填充 30%。做 2 件,两件相同。"],
+                                       holes={3.4: "M3 过孔,两片对扣"},
+                                       extra=[f"内径 {fmt(b.SYR_D + 2 * b.SYR_GAP)}:注射筒外径 {fmt(b.SYR_D)},每边留 {fmt(b.SYR_GAP)} 贴硅胶加热片和保温棉。下单前先量注射筒外径。",
+                                              "一端顶部的缺口是加热片和测温线的出线口。"]),
+        "06_humidifier_plate_AL6061": dict(no="HP-06", mat="6061-T6", holes={3.4: "M3 沉头螺丝孔,上表面锪 90° 沉头 φ6.5", 2.2: "测温孔"},
+                                           notes=["材料 6061-T6 铝合金,数控加工。", "未注尺寸以同名 STEP 模型为准,未注公差 ±0.1。",
+                                                  "上表面(放加湿罐的面)平面度 0.05,粗糙度 Ra≤1.6。", "锐边倒钝 C0.3。",
+                                                  "样机不做表面处理;成品做硬质阳极氧化。"],
+                                           extra=[f"直径 {fmt(b.HUM_D)} 按加湿罐底面直径定,下单前先量加湿罐。", "两个测温孔从同一侧的圆周面钻入,孔中心在板厚正中。"]),
+        "07_humidifier_base": dict(no="HP-07", mat="PETG 或耐温 ABS", notes=PRINT_NOTES + ["填充 30%。铝盘最高 85 ℃,底座与铝盘之间垫 3 mm 硅胶隔热垫。"],
+                                   holes={2.6: "M3 自攻螺丝底孔,固定铝盘", 12.2: "GX12 航空插座"},
+                                   extra=["顶部沉台放铝盘,铝盘高出底座 0.5。沉台一侧的缺口走测温线。"]),
+        "08_control_box_body": dict(no="HP-08", mat="PETG", notes=PRINT_NOTES + ["填充 30%。开口朝上打印。"],
+                                    holes={2.6: "M3 自攻螺丝底孔(四角螺丝柱)", 16.2: "GX16 航空插座:电源、注射筒套、保温板、加湿底座、输气管",
+                                           12.2: "GX12 航空插座:循环泵、腹腔探头和压力"}),
+        "09_control_box_lid": dict(no="HP-09", mat="PETG", notes=PRINT_NOTES + ["填充 30%。外表面朝下打印。"],
+                                   holes={3.4: "M3 过孔", 5.2: "φ5 指示灯(红、黄、绿)", 16.2: "中止键 φ16", 12.2: "消音键 φ12",
                                           12.0: "蜂鸣器出声孔"},
                                    extra=[f"矩形窗口 {fmt(b.SCR_W)}×{fmt(b.SCR_H)} 是 7 英寸触摸屏的可视窗,中心 ({fmt(b.BX / 2)},{fmt(b.lid_screen_y())})。屏的玻璃从盒内用双面胶贴在盖板背面。",
-                                          "下排从左到右:红、黄、绿指示灯,暂停键,消音键,蜂鸣器。"]),
+                                          "下排从左到右:红、黄、绿指示灯,中止键,消音键,蜂鸣器。"]),
     }
 
 
@@ -144,7 +150,7 @@ def find_holes(solid, lo, hi):
         g[1].append((a0, a1))
     holes = []
     for (k, pos, r), (span, ivs) in groups.items():
-        if span < 2 * math.pi - 0.01:               # 不是整圆(如被开口切开的滴斗孔)
+        if span < 2 * math.pi - 0.01:               # 不是整圆(如被开口切开的孔)
             continue
         a0, a1 = min(i[0] for i in ivs), max(i[1] for i in ivs)
         others = [i for i in range(3) if i != k]
