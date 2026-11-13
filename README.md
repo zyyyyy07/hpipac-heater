@@ -4,6 +4,10 @@
 
 > **这是台架样机,只用水和模型腹腔测试,不用于病人,不接化疗药。** 喷头的雾化效果、加热效果、药物损失都还没有实测。
 
+## [▶ 打开演示页](https://zyyyyy07.github.io/hpipac-heater/)
+
+点开就能看原理动画、拖动旋转三维模型、按按钮模拟一次完整手术(包括报警)。不用安装任何东西,手机也能打开。
+
 ## 它怎么工作
 
 <p><img src="1-design/img/system.svg" alt="系统回路图" width="640"></p>
@@ -71,7 +75,7 @@
 | [5-firmware/](5-firmware/) | ESP32 固件 |
 | [6-software/](6-software/) | 服务器、遥控控制台、主机触摸屏页面、设备模拟器 |
 | [7-testing/](7-testing/) | 分步测试、已知风险 |
-| [demo/](demo/) | 演示页:原理动画、三维模型、手术流程模拟。下载后双击 index.html 就能在浏览器打开 |
+| [demo/](demo/) | 演示页的源文件,在线地址 https://zyyyyy07.github.io/hpipac-heater/ |
 
 ## 不用硬件先看效果
 
